@@ -12,6 +12,7 @@ import * as popups from "./popups.mjs";
 import * as pushButtons from "./push-buttons.mjs";
 import * as keybindings from "./keybindings.mjs";
 import * as sceneFollow from "./scene-follow.mjs";
+import * as combatHighlight from "./combat-highlight.mjs";
 import { isTableUser } from "./identity.mjs";
 import { engageLock } from "./canvas-lock.mjs";
 import { get as getSetting } from "./settings.mjs";
@@ -27,6 +28,7 @@ Hooks.once("init", () => {
   pushButtons.init();
   keybindings.init();
   sceneFollow.init();
+  combatHighlight.init();
 });
 
 Hooks.once("ready", () => {
