@@ -304,7 +304,7 @@ function anyCombatActive() {
 }
 ```
 
-The GM client is the source of truth for "is combat active" and "what is selected" — broadcast a single high-level `setVisionFocus({tokenId})` socket call rather than having the Table client recompute combat state.
+The GM client is the source of truth for "is combat active" and "whose turn is it" — broadcast a single high-level `setVisionFocus({tokenId})` socket call (reading `combat.combatant.tokenId`) rather than having the Table client recompute combat state.
 
 ### 3.8 Token / Actor ownership
 
@@ -711,14 +711,16 @@ Hooks.on("getHeaderControlsApplicationV2", (app, controls) => {
 
 ### 4.3 Vision switching
 
-**Recommendation: programmatically control which token is "controlled" on the Table client; default to no control (union vision) when out of combat.**
+**Recommendation: programmatically control which token is "controlled" on the Table client; default to no control (union vision) when out of combat. In combat, follow the combat tracker's active combatant (`combat.combatant.tokenId`) — NOT the GM's selection.**
 
 Workflow:
 
 1. **GM init:** ensure the Table user has OBSERVER or OWNER on every PC actor. Without this, none of the vision logic works.
-2. **GM hooks** `controlToken`: if `game.combat?.started`, socket the selected token's id to the Table; if GM releases, socket `null`.
-3. **GM hooks** `combatStart` / `combatEnd` / `updateCombat`: on `combatStart`, send GM's currently controlled token; on `combatEnd`, send `null`.
+2. **GM hooks** `combatStart` / `combatTurn` / `combatRound` / `updateCombat`: send `game.combats.active?.combatant?.tokenId` to the Table.
+3. **GM hooks** `combatEnd` / `deleteCombat`: send `null` so the Table releases and falls back to union vision.
 4. **Table client** receives `setVisionFocus({tokenId})`, calls `Token.get(id)?.control({releaseOthers: true})` or releases all, then `canvas.perception.update({refreshVision: true, refreshLighting: true})`.
+
+`controlToken` is intentionally NOT a vision trigger. GMs routinely select NPCs, traps, lights, walls, or templates that should not change what the room sees. The combat tracker is the single source of truth during combat.
 
 Why not swap a built-in `VisionMode`? VisionMode is a visual filter (Basic Sight, Darkvision) on the active POV — it doesn't change *which* tokens contribute. The cleanest semantics are Foundry's own native rule: "controlled-token-vision when one is controlled, union-of-observed-tokens otherwise."
 
@@ -941,8 +943,8 @@ Real tradeoffs to pick consciously:
 5. **Auto-clear popups on a timer?**
    - Useful for image/portrait pushes (default 30s). Painful for journals the GM wants left open. Per-push-type configurable.
 
-6. **GM selection outside combat?**
-   - Spec says: "out of combat → party union vision." GM's selection ignored out of combat. Correct because GM often selects NPCs/traps/walls/lights. Only override: manual "Spotlight this token on the Table" toolbar button.
+6. **GM selection in or out of combat?**
+   - Spec says: "out of combat → party union vision; in combat → follow the combat tracker's current combatant." The GM's selection is **ignored in both cases** because the GM often selects NPCs/traps/walls/lights/templates that the room shouldn't see through. Only override: manual "Spotlight this token on the Table" toolbar button (v0.2).
 
 7. **Multiple active combats?**
    - Use `game.combats.active`; ignore others.

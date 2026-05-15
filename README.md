@@ -6,7 +6,7 @@ named "Table" into a clean, chrome-free display: the GM clicks a button on
 their own machine and a journal, item card, or character portrait appears
 centered on the TV. Vision adapts automatically — out of combat the Table
 shows the union of the party's sight; in combat it follows whichever token
-the GM is controlling. A glowing ring marks the active combatant. The map
+the combat tracker says is currently up. A glowing ring marks the active combatant. The map
 fits the TV's aspect ratio. The canvas can't be panned or zoomed by a passing
 player elbow, but tokens still drag freely so players can walk up and play.
 
@@ -38,10 +38,12 @@ player elbow, but tokens still drag freely so players can walk up and play.
 
 ### Vision
 
-- **Combat-aware focus.** When combat is active and the GM selects a token,
-  the Table follows that token's vision. When combat ends or the GM
-  releases, the Table falls back to the union of every actor it has
-  OBSERVER or OWNER on — Foundry's native party-vision behavior.
+- **Combat-aware focus.** When combat is active, the Table follows the
+  current combatant in the combat tracker — whoever's turn it is. When
+  combat ends, the Table falls back to the union of every actor it has
+  OBSERVER or OWNER on — Foundry's native party-vision behavior. GM
+  selection is intentionally ignored (the GM often selects NPCs, traps,
+  or lights that shouldn't change what the room sees).
 - **Automatic ownership** management: every actor with a non-Table player
   owner gets the Table user added at OWNER level so players can walk up and
   drag their own token.
@@ -119,8 +121,9 @@ and restart Foundry.
   the Control Palette.
 - **Switch into setup mode** (UI back, canvas pannable) for staging:
   `Ctrl+Shift+U`. Hit it again to return to play mode.
-- **Run combat.** Start a combat encounter; pick whoever's turn it is on the
-  GM client to drive the Table's vision and the active-turn ring.
+- **Run combat.** Start a combat encounter. Whoever the tracker shows as
+  up will drive the Table's vision and the active-turn ring; advancing
+  the turn on the GM client swaps both automatically.
 
 ## Settings reference
 
