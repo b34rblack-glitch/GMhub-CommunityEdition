@@ -6,6 +6,8 @@ import * as settings from "./settings.mjs";
 import * as sockets from "./sockets.mjs";
 import * as uiHiding from "./ui-hiding.mjs";
 import * as sceneFit from "./scene-fit.mjs";
+import * as ownership from "./ownership.mjs";
+import * as vision from "./vision.mjs";
 import { isTableUser } from "./identity.mjs";
 import { engageLock } from "./canvas-lock.mjs";
 import { get as getSetting } from "./settings.mjs";
@@ -15,6 +17,8 @@ Hooks.once("init", () => {
   settings.init();
   uiHiding.init();
   sceneFit.init();
+  ownership.init();
+  vision.init();
 });
 
 Hooks.once("ready", () => {
