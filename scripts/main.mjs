@@ -10,6 +10,8 @@ import * as ownership from "./ownership.mjs";
 import * as vision from "./vision.mjs";
 import * as popups from "./popups.mjs";
 import * as pushButtons from "./push-buttons.mjs";
+import * as keybindings from "./keybindings.mjs";
+import * as sceneFollow from "./scene-follow.mjs";
 import { isTableUser } from "./identity.mjs";
 import { engageLock } from "./canvas-lock.mjs";
 import { get as getSetting } from "./settings.mjs";
@@ -23,6 +25,8 @@ Hooks.once("init", () => {
   vision.init();
   popups.init();
   pushButtons.init();
+  keybindings.init();
+  sceneFollow.init();
 });
 
 Hooks.once("ready", () => {
