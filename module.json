@@ -1,0 +1,48 @@
+{
+  "id": "community-screen",
+  "title": "Community Screen",
+  "description": "Drive a shared TV at the table from the GM laptop. Pushes journals, items, and portraits to a dedicated 'Table' user; auto-fits scenes; locks the canvas; mirrors vision in and out of combat; highlights the active combatant.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "14",
+    "maximum": ""
+  },
+  "authors": [
+    {
+      "name": "b34rblack-glitch",
+      "url": "https://github.com/b34rblack-glitch"
+    }
+  ],
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/community-screen.css", "styles/popups.css", "styles/push-buttons.css"],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "socket": true,
+  "relationships": {
+    "requires": [
+      {
+        "id": "socketlib",
+        "type": "module",
+        "manifest": "https://github.com/farling42/foundryvtt-socketlib/releases/latest/download/module.json"
+      },
+      {
+        "id": "lib-wrapper",
+        "type": "module",
+        "manifest": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json"
+      }
+    ],
+    "recommends": [
+      { "id": "sequencer", "type": "module" },
+      { "id": "jb2a_patreon", "type": "module" }
+    ]
+  },
+  "url": "https://github.com/b34rblack-glitch/GMhub-CommunityEdition",
+  "manifest": "https://github.com/b34rblack-glitch/GMhub-CommunityEdition/releases/latest/download/module.json",
+  "download": "https://github.com/b34rblack-glitch/GMhub-CommunityEdition/releases/download/v0.1.0/module.zip"
+}

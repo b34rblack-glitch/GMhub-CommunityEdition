@@ -1,0 +1,17 @@
+/* community-screen — centered/modal popup styling */
+
+body.community-screen-modal-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 99;
+  pointer-events: none;
+}
+
+/* Ensure popups float above the backdrop. */
+body.community-screen-modal-bg .application,
+body.community-screen-modal-bg .window-app,
+body.community-screen-modal-bg .image-popout {
+  z-index: 100 !important;
+}

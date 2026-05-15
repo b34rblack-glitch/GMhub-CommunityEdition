@@ -1,0 +1,41 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+*.code-workspace
+
+# Foundry local data
+.foundryvtt/
+
+# Build artifacts
+dist/
+build/
+*.zip
+!module.zip.sample
+
+# Logs / caches
+*.log
+.cache/
+.eslintcache
+.prettiercache

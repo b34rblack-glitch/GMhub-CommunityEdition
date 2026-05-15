@@ -1,0 +1,101 @@
+/* community-screen — body-class UI hiding for the Table client */
+
+@layer modules {
+  body.community-screen-hidden #sidebar,
+  body.community-screen-hidden #hotbar,
+  body.community-screen-hidden #players,
+  body.community-screen-hidden #scene-navigation,
+  body.community-screen-hidden #navigation,
+  body.community-screen-hidden #controls,
+  body.community-screen-hidden #logo,
+  body.community-screen-hidden #ui-top,
+  body.community-screen-hidden #ui-bottom,
+  body.community-screen-hidden #ui-left,
+  body.community-screen-hidden #ui-right,
+  body.community-screen-hidden #notifications,
+  body.community-screen-hidden #chat-form,
+  body.community-screen-hidden #fps {
+    display: none !important;
+  }
+
+  body.community-screen-hidden #board {
+    cursor: default;
+  }
+
+  body.community-screen-locked #board {
+    cursor: default !important;
+  }
+}
+
+/* Control palette */
+.community-screen-control-palette .community-screen-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.community-screen-control-palette .community-screen-status {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.community-screen-control-palette .community-screen-status.online {
+  background: rgba(50, 160, 80, 0.15);
+  color: #4caf50;
+}
+
+.community-screen-control-palette .community-screen-status.offline {
+  background: rgba(180, 70, 70, 0.15);
+  color: #d05050;
+}
+
+.community-screen-control-palette .community-screen-palette-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.community-screen-control-palette .community-screen-palette-actions button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.community-screen-control-palette .community-screen-palette-actions button:hover {
+  background: rgba(255, 210, 74, 0.15);
+}
+
+.community-screen-control-palette .community-screen-palette-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Fallback if @layer modules isn't applied for some reason. */
+body.community-screen-hidden #sidebar,
+body.community-screen-hidden #hotbar,
+body.community-screen-hidden #players,
+body.community-screen-hidden #scene-navigation,
+body.community-screen-hidden #navigation,
+body.community-screen-hidden #controls,
+body.community-screen-hidden #logo,
+body.community-screen-hidden #ui-top,
+body.community-screen-hidden #ui-bottom,
+body.community-screen-hidden #ui-left,
+body.community-screen-hidden #ui-right,
+body.community-screen-hidden #notifications,
+body.community-screen-hidden #chat-form,
+body.community-screen-hidden #fps {
+  display: none !important;
+}

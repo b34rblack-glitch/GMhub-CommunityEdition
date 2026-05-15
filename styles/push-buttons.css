@@ -1,0 +1,15 @@
+/* community-screen — styles for injected sheet-header push buttons */
+
+.application .window-header .header-control[data-action="community-screen-push"],
+.window-app .window-header a.community-screen-push {
+  color: var(--color-text-light-highlight, #ffd24a);
+}
+
+.application .window-header .header-control[data-action="community-screen-push"] i,
+.window-app .window-header a.community-screen-push i {
+  margin-right: 0.25rem;
+}
+
+.directory .directory-list .entry .community-screen-push {
+  color: var(--color-text-light-highlight, #ffd24a);
+}

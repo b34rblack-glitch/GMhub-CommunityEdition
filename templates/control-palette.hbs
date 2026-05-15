@@ -1,0 +1,21 @@
+<div class="community-screen-palette">
+  <p class="community-screen-status {{#if online}}online{{else}}offline{{/if}}">
+    <i class="fa-solid {{#if online}}fa-circle-check{{else}}fa-circle-xmark{{/if}}"></i>
+    <span>{{statusText}}</span>
+  </p>
+
+  <div class="community-screen-palette-actions">
+    <button type="button" data-action="close-all" {{#unless hasTableUser}}disabled{{/unless}}>
+      <i class="fa-solid fa-xmark"></i>
+      <span>{{labels.closeAll}}</span>
+    </button>
+    <button type="button" data-action="refit-scene" {{#unless hasTableUser}}disabled{{/unless}}>
+      <i class="fa-solid fa-expand"></i>
+      <span>{{labels.refitScene}}</span>
+    </button>
+    <button type="button" data-action="toggle-table-mode" {{#unless hasTableUser}}disabled{{/unless}}>
+      <i class="fa-solid fa-toggle-on"></i>
+      <span>{{labels.toggleTableMode}}</span>
+    </button>
+  </div>
+</div>

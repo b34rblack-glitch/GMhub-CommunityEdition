@@ -1,0 +1,103 @@
+{
+  "COMMUNITY_SCREEN": {
+    "module": {
+      "title": "Community Screen"
+    },
+    "settings": {
+      "table-user-id": {
+        "name": "Table User",
+        "hint": "The user account that drives the shared TV. Must be Player role. Enter the user ID (a 16-character string)."
+      },
+      "fit-mode": {
+        "name": "Default Scene Fit Mode",
+        "hint": "How scenes should fit the Table screen by default. Per-scene override available in Scene Config.",
+        "contain": "Contain (letterbox)",
+        "cover": "Cover (crop)",
+        "width": "Fit width",
+        "height": "Fit height",
+        "native": "Native (1:1)"
+      },
+      "custom-scale": {
+        "name": "Custom Scale Override",
+        "hint": "Force this zoom level instead of computing one. 1.0 = native. Set 0 to disable."
+      },
+      "highlight-enabled": {
+        "name": "Show Active-Turn Highlight",
+        "hint": "Draw a glowing ring under the active combatant on this client."
+      },
+      "highlight-style": {
+        "name": "Active-Turn Highlight Style",
+        "hint": "Visual style for the active-turn highlight.",
+        "subtle": "Subtle",
+        "default": "Default",
+        "dramatic": "Dramatic",
+        "sequencer": "Sequencer (auto if installed)"
+      },
+      "highlight-use-disposition": {
+        "name": "Color Highlight by Disposition",
+        "hint": "Friendly/neutral/hostile use different ring colors. Disable for a single neutral color."
+      },
+      "table-mode": {
+        "name": "Table Mode",
+        "hint": "play = UI hidden + canvas locked. setup = UI visible + canvas pannable.",
+        "play": "Play",
+        "setup": "Setup"
+      },
+      "suppress-table-chat": {
+        "name": "Suppress Chat Input on Table",
+        "hint": "Hide the chat input on the Table client so spectators can't type."
+      },
+      "auto-grant-ownership": {
+        "name": "Auto-grant OWNER on PCs",
+        "hint": "Automatically grant the Table user OWNER on every player-owned actor. Required for the Table to drag tokens."
+      },
+      "popup-backdrop": {
+        "name": "Dim Canvas Behind Pop-ups",
+        "hint": "Darken the rest of the canvas when a journal/item/portrait pop-up is open on the Table."
+      }
+    },
+    "keybindings": {
+      "toggle-table-mode": {
+        "name": "Toggle Table Mode",
+        "hint": "Flip the Table client between play (UI hidden, canvas locked) and setup (UI visible, canvas unlocked)."
+      },
+      "close-all-popups": {
+        "name": "Close All Table Pop-ups",
+        "hint": "Close every pop-up open on the Table client."
+      }
+    },
+    "buttons": {
+      "push-to-table": "Push to Table",
+      "close-all": "Close All Pop-ups",
+      "refit-scene": "Refit Scene",
+      "toggle-table-mode": "Toggle Table Mode"
+    },
+    "context": {
+      "push-to-table": "Push to Table"
+    },
+    "scene-config": {
+      "fieldset": "Community Screen",
+      "fit-mode-label": "Fit mode for the Table",
+      "fit-mode-default": "Use world default"
+    },
+    "control-palette": {
+      "title": "Community Screen",
+      "table-online": "Table user is online",
+      "table-offline": "Table user is offline",
+      "no-table-user": "No Table user configured"
+    },
+    "notifications": {
+      "pushed": "Pushed to Table.",
+      "closed-all": "Closed all Table pop-ups."
+    },
+    "errors": {
+      "table-offline": "Table client is not connected.",
+      "no-table-user": "No Table user is configured.",
+      "no-observer-actors": "The configured Table user has no actors with OBSERVER or OWNER permission. Vision will not work until permissions are granted.",
+      "push-failed": "Could not push to Table: {message}"
+    },
+    "warnings": {
+      "no-table-user-online": "Configured Table user is not currently logged in."
+    }
+  }
+}
