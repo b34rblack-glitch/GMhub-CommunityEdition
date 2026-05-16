@@ -1,4 +1,5 @@
-// Community Screen — combat-aware vision focus: mirrors GM controlToken / combat hooks to the Table.
+// Community Screen — combat-aware vision focus: mirrors the combat tracker's
+// active combatant to the Table, with union-vision fallback out of combat.
 
 import { isGM, isTableUser, getTableUserId, isTableOnline } from "./identity.mjs";
 import { executeAsUser, setHandler } from "./sockets.mjs";
@@ -6,12 +7,17 @@ import { logger } from "./lib/logger.mjs";
 import { debounce } from "./lib/helpers.mjs";
 
 /**
- * Whether any combat is currently active (started encounter).
+ * Resolve the token id of the active combatant in the currently-active combat,
+ * if any. The "active combatant" is the one the combat tracker is currently
+ * pointing at (i.e. whose turn it is) — NOT whichever token the GM happens to
+ * have selected.
  *
- * @returns {boolean}
+ * @returns {string | null}
  */
-function anyCombatActive() {
-  return (game.combats ?? []).some((c) => c.active && c.started);
+function activeCombatantTokenId() {
+  const combat = game.combats?.active;
+  if (!combat?.started) return null;
+  return combat.combatant?.tokenId ?? null;
 }
 
 /**
@@ -46,8 +52,9 @@ function _setVisionFocus({ tokenId } = {}) {
 
 /**
  * From the GM client: send the current "what should the Table follow?" to
- * the Table. During combat, follow the GM's last-controlled token;
- * otherwise release.
+ * the Table. During combat, follow the active combatant from the combat
+ * tracker (whoever's turn it is). Out of combat, send null so the Table
+ * releases and falls back to native union vision via OBSERVER actors.
  *
  * @returns {Promise<void>}
  */
@@ -57,12 +64,7 @@ async function broadcastFocus() {
   const tableId = getTableUserId();
   if (!tableId) return;
 
-  let tokenId = null;
-  if (anyCombatActive()) {
-    // Use first controlled token; if none, leave as null (vision fallback).
-    const ctrl = canvas?.tokens?.controlled ?? [];
-    tokenId = ctrl[0]?.id ?? null;
-  }
+  const tokenId = activeCombatantTokenId();
   try {
     await executeAsUser("setVisionFocus", tableId, { tokenId });
   } catch (err) {
@@ -82,11 +84,12 @@ export function init() {
   // Table-side handler registration (idempotent).
   setHandler("setVisionFocus", _setVisionFocus);
 
-  // GM-side hooks only.
+  // GM-side hooks only. Note: controlToken is intentionally NOT a trigger —
+  // the GM may select an NPC, trap, light, etc. without intending to change
+  // what the Table sees. The combat tracker is the authoritative source.
   Hooks.once("ready", () => {
     if (!isGM()) return;
 
-    Hooks.on("controlToken", () => debouncedBroadcast());
     Hooks.on("combatStart", () => debouncedBroadcast());
     Hooks.on("combatTurn", () => debouncedBroadcast());
     Hooks.on("combatRound", () => debouncedBroadcast());

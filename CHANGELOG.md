@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Combat vision focus now follows the combat tracker's active combatant**
+  (`combat.combatant.tokenId`) instead of whichever token the GM has
+  selected. The GM client routinely controls NPCs, traps, lights, and
+  templates that the room shouldn't see through — the combat tracker is
+  the correct single source of truth for "whose vision does the TV
+  show". `controlToken` is no longer a vision trigger. README and
+  `docs/design.md` §3.6 / §4.3 / §6 updated to match.
+
 ## [0.1.0] — 2026-05-15
 
 ### Added
