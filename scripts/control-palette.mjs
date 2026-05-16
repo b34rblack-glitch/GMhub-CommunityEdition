@@ -124,18 +124,19 @@ export function open() {
 /**
  * Inject the palette button into Foundry's scene controls.
  *
- * @param {Array<object>} controls - Scene-control groups.
+ * Foundry v13/v14 changed the `getSceneControlButtons` hook payload from an
+ * **array** of group objects to an **object map** keyed by group name. We
+ * support both shapes defensively so the palette appears regardless of the
+ * exact core version, and so an upstream change back doesn't break us.
+ *
+ * @param {Array<object> | Record<string, object>} controls
  * @returns {void}
  */
 function injectSceneControl(controls) {
   if (!isGM()) return;
-  if (!Array.isArray(controls)) return;
-  // v14 scene-control shape: array of groups with .tools array.
-  const tokenGroup = controls.find((g) => g?.name === "token") ?? controls[0];
-  if (!tokenGroup) return;
-  if (!Array.isArray(tokenGroup.tools)) return;
-  if (tokenGroup.tools.some((tool) => tool?.name === "community-screen-palette")) return;
-  tokenGroup.tools.push({
+  if (!controls) return;
+
+  const tool = {
     name: "community-screen-palette",
     title: t("control-palette.title"),
     icon: "fa-solid fa-tv",
@@ -143,7 +144,34 @@ function injectSceneControl(controls) {
     visible: true,
     onClick: () => open(),
     onChange: () => open(),
-  });
+  };
+
+  // v14 shape: controls is an object map of group-name → group.
+  if (!Array.isArray(controls) && typeof controls === "object") {
+    const group = controls.token ?? controls.tokens ?? Object.values(controls)[0];
+    if (!group) return;
+    // Tools can be an object map or an array depending on version.
+    if (group.tools && !Array.isArray(group.tools) && typeof group.tools === "object") {
+      if (group.tools["community-screen-palette"]) return;
+      group.tools["community-screen-palette"] = tool;
+      return;
+    }
+    if (Array.isArray(group.tools)) {
+      if (group.tools.some((t) => t?.name === "community-screen-palette")) return;
+      group.tools.push(tool);
+      return;
+    }
+    return;
+  }
+
+  // Legacy v12-ish shape: controls is an array of groups with .tools arrays.
+  if (Array.isArray(controls)) {
+    const group = controls.find((g) => g?.name === "token") ?? controls[0];
+    if (!group) return;
+    if (!Array.isArray(group.tools)) return;
+    if (group.tools.some((t) => t?.name === "community-screen-palette")) return;
+    group.tools.push(tool);
+  }
 }
 
 /**
@@ -157,5 +185,16 @@ export function init() {
   // Live-refresh status indicator when users connect/disconnect.
   Hooks.on("userConnected", () => {
     if (palette?.rendered) palette.render(false);
+  });
+
+  // Expose a console-callable opener so GMs can pop the palette even if
+  // scene-control injection fails on some odd setup. From the dev tools:
+  //   game.modules.get("community-screen").api.openPalette()
+  Hooks.once("ready", () => {
+    const mod = game.modules?.get?.("community-screen");
+    if (mod) {
+      mod.api = mod.api ?? {};
+      mod.api.openPalette = () => open();
+    }
   });
 }

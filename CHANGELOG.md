@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Control palette button now appears in v14 scene controls.** The
+  `getSceneControlButtons` hook payload changed from an array of group
+  objects to an object map keyed by group name; the old `controls.find()`
+  silently no-op'd. Now handles both shapes (and both array-tools and
+  object-tools shapes) defensively.
+- **Console fallback for the control palette.** If scene-control
+  injection ever fails on a particular setup, GMs can run
+  `game.modules.get("community-screen").api.openPalette()` from dev
+  tools to surface the palette.
+- **Combat vision hooks read the supplied `combat` document directly**
+  instead of `game.combats.active`. Avoids a race where `active` lags
+  behind the in-flight update and the broadcast snapshots the
+  pre-update combatant. Also falls back to `combatant.token.id`
+  alongside `combatant.tokenId` to be tolerant of the v14 Combatant
+  shape.
 - **Table User setting now accepts a user name OR a user id.** Previously
   it only worked with the (non-obvious) user id, so entering `Table` —
   the natural thing to type — left the module thinking the Table client

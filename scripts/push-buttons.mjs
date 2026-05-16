@@ -184,8 +184,22 @@ function collectionToDocName(nick) {
  * @returns {void}
  */
 export function init() {
+  // AppV2 header controls. Foundry's hook namer dispatches both a generic
+  // (getHeaderControlsApplicationV2) and class-specific names depending on
+  // the system's sheet class — listen broadly.
   Hooks.on("getHeaderControlsApplicationV2", injectAppV2HeaderControl);
   Hooks.on("getApplicationHeaderControls", injectAppV2HeaderControl);
+  // Some sheets fire class-specific variants — register the common ones.
+  const v2DocClasses = [
+    "JournalEntrySheet",
+    "JournalSheet",
+    "ItemSheet",
+    "ActorSheet",
+    "SceneConfig",
+  ];
+  for (const cls of v2DocClasses) {
+    Hooks.on(`getHeaderControls${cls}`, injectAppV2HeaderControl);
+  }
 
   // Legacy v1 sheet header buttons (some systems still use these).
   Hooks.on("getJournalSheetHeaderButtons", injectV1HeaderButton);
