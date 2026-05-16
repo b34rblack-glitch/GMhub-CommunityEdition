@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Push to Table now uses Foundry's native share mechanisms** instead
+  of a custom socketlib payload. v14-compatible.
+  - **Journals**: `JournalEntry.prototype.show(true, [tableUser])` —
+    Foundry's own "Show to Players" socket flow. The receiving client
+    renders through its own sheet so the system-specific layout is
+    preserved. We still grant the Table user OBSERVER ownership +
+    200ms settle delay so the entry is in their collection before
+    `show()` fires.
+  - **Items**: `foundry.applications.apps.ImagePopout.shareImage({image,
+title, caption, uuid}, [tableUserId])` — items have no native
+    `.show()`, so we ship the item's image and a plain-text rendering
+    of `system.description` (system-agnostic — handles `string`,
+    `{value}`, `{unidentified}`) as the popout caption.
+  - **Portraits / Actors**: same `ImagePopout.shareImage` with the
+    actor's `img` and name.
+- **Close All** rewritten in the `gsimon2/close-player-art` style:
+  walks `foundry.applications.instances` (v14 AppV2 registry) and
+  `ui.windows` (legacy AppV1 registry) and closes anything whose
+  constructor name matches `ImagePopout` / `JournalSheet` /
+  `JournalEntrySheet` / `JournalEntryPageSheet`. Catches Foundry-
+  native shares regardless of how they were opened — no internal
+  tracked-set fragility.
+- **Backdrop tracking** likewise rewritten to walk the application
+  registries on every `render*` / `close*` hook rather than maintain
+  its own `Set`.
+- Console fallbacks exposed:
+  `game.modules.get("community-screen").api.pushDocument(doc)`,
+  `.pushImage(src, title)`,
+  `.closeAllPopups()`,
+  `.countOpenPopouts()`.
+
+### Changed (prior unreleased entries)
+
 - **Push to Table now ships rendered HTML, not a document uuid.** The
   previous "send uuid, have Table `fromUuid` it, render the system's own
   sheet" approach was fragile: it depended on a just-in-time OBSERVER
