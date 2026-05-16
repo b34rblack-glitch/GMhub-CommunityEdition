@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   show". `controlToken` is no longer a vision trigger. README and
   `docs/design.md` §3.6 / §4.3 / §6 updated to match.
 
+### Fixed
+
+- **Release workflow now publishes on push to `main`** as well as on
+  `v*.*.*` tag pushes. Foundry's manifest-URL install
+  (`releases/latest/download/module.json`) now resolves without a
+  maintainer first having to push a release tag from a local clone
+  (which was blocked by the dev-environment proxy).
+- **`module.zip` now wraps its contents in a top-level
+  `community-screen/` directory**, so unzipping into Foundry's
+  `Data/modules/` tree drops in cleanly with the correct module-id
+  folder name. Previously the zip extracted loose files and would have
+  required a manual rename to install.
+
 ## [0.1.0] — 2026-05-15
 
 ### Added

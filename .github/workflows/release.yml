@@ -2,8 +2,10 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*.*.*"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -16,11 +18,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Resolve release tag (from git tag or module.json version)
         id: ver
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"
+            source="tag"
+          else
+            version=$(node -e "console.log(require('./module.json').version)")
+            source="module.json"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "source=${source}" >> "$GITHUB_OUTPUT"
+          echo "Releasing v${version} (source: ${source})"
 
-      - name: Ensure module.json version matches tag
+      - name: Sanity-check module.json version matches tag when triggered by tag
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           mver=$(node -e "console.log(require('./module.json').version)")
           if [ "$mver" != "${{ steps.ver.outputs.version }}" ]; then
@@ -30,7 +44,10 @@ jobs:
 
       - name: Build module.zip
         run: |
-          zip -r module.zip \
+          # Stage files under a top-level "community-screen/" directory so the
+          # extracted zip drops cleanly into Foundry's Data/modules/ tree.
+          mkdir -p staging/community-screen
+          cp -r \
             module.json \
             README.md \
             LICENSE \
@@ -38,12 +55,20 @@ jobs:
             scripts \
             styles \
             templates \
-            lang
+            lang \
+            staging/community-screen/
+          (cd staging && zip -r ../module.zip community-screen)
+          ls -lh module.zip
 
-      - name: Publish GitHub Release
+      - name: Publish / update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ steps.ver.outputs.tag }}
+          tag_name: ${{ steps.ver.outputs.tag }}
           files: |
             module.zip
             module.json
           generate_release_notes: true
+          # Allow re-running on the same version to overwrite assets
+          # (useful while v0.1.x is being iterated on before bumping).
+          fail_on_unmatched_files: true
