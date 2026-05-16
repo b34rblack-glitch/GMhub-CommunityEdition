@@ -1,4 +1,4 @@
-/* community-screen — centered/modal popup styling */
+/* community-screen — centered display popup + canvas backdrop */
 
 body.community-screen-modal-bg::before {
   content: "";
@@ -9,9 +9,77 @@ body.community-screen-modal-bg::before {
   pointer-events: none;
 }
 
-/* Ensure popups float above the backdrop. */
+/* Float popups above the backdrop. */
 body.community-screen-modal-bg .application,
 body.community-screen-modal-bg .window-app,
 body.community-screen-modal-bg .image-popout {
   z-index: 100 !important;
+}
+
+/* The community-screen TableDisplay window. */
+.community-screen-display .community-screen-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  max-height: 100%;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.community-screen-display .community-screen-popup-subtitle {
+  margin: 0;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.community-screen-display .community-screen-popup-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.community-screen-display .community-screen-journal-page + .community-screen-journal-page {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.community-screen-display .community-screen-page-name {
+  margin: 0 0 0.5rem;
+}
+
+.community-screen-display .community-screen-page-image,
+.community-screen-display .community-screen-item-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.community-screen-display .community-screen-page-video {
+  max-width: 100%;
+}
+
+.community-screen-display .community-screen-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.community-screen-display .community-screen-item-name {
+  margin: 0;
+}
+
+.community-screen-display .community-screen-item-image {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.community-screen-display .community-screen-empty {
+  opacity: 0.6;
+  text-align: center;
+  padding: 2rem;
 }

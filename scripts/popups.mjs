@@ -1,180 +1,212 @@
-// Community Screen — pop-up rendering on the Table: journals, items, portraits, images, close-all.
+// Community Screen — push display on the Table client.
+//
+// Design notes (Foundry v14):
+// Previous versions tried to push a document `uuid` from the GM and have the
+// Table client `fromUuid()` it and render the system's own sheet. That path
+// is fragile: it depends on the Table-Player user having OBSERVER ownership
+// on the document, which has to be granted just-in-time and races with the
+// socket message. It also depends on each system's sheet renderer behaving
+// the same for non-owners, which is not portable.
+//
+// The robust pattern other "show to players" modules use (Monk's Common
+// Display, Theatre Inserts, Foundry core's own `JournalEntry.show()`):
+//   GM builds the renderable content (HTML + image URL) and ships THAT
+//   over the socket. The receiving client renders a generic window with
+//   the inline data — no document lookup, no permission dependency.
+//
+// That's what this module now does. The display window is a small
+// ApplicationV2 that just takes `{title, subtitle?, html}` and renders the
+// pre-built HTML inside it. ImagePopout is still used for portraits and
+// raw images because it already takes a URL and has no document dep.
 
-import { BODY_CLASS_MODAL_BG } from "./module.mjs";
+import { MODULE_ID, BODY_CLASS_MODAL_BG } from "./module.mjs";
 import { isTableUser } from "./identity.mjs";
 import { get as getSetting } from "./settings.mjs";
 import { setHandler } from "./sockets.mjs";
-import { sleep } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
 
 /**
- * Resolve a uuid to a document, retrying once after a brief wait if the
- * first attempt returns null. The Table client occasionally races ahead
- * of the ownership-grant update that the GM client just performed; the
- * retry covers that propagation window.
- *
- * @param {string} uuid
- * @param {number} [retryMs] - Wait before the second attempt.
- * @returns {Promise<Document | null>}
- */
-async function fromUuidWithRetry(uuid, retryMs = 400) {
-  try {
-    let doc = await fromUuid(uuid);
-    if (doc) return doc;
-    await sleep(retryMs);
-    doc = await fromUuid(uuid);
-    if (doc) {
-      logger.info(`fromUuid retry succeeded for ${uuid}.`);
-    } else {
-      logger.warn(`fromUuid retry still null for ${uuid} — check Table user permissions.`);
-    }
-    return doc ?? null;
-  } catch (err) {
-    logger.warn(`fromUuid threw for ${uuid}:`, err);
-    return null;
-  }
-}
-
-/**
- * The communityScreen window-namespace state object — tracks open sheets and images
- * so closeAllPopups can hit everything in one pass.
+ * State container for tracked popups. Stored on `window` so the Table
+ * client can introspect open popups from the dev console.
  */
 function getState() {
   if (!window.communityScreen) {
-    window.communityScreen = { openSheets: new Set(), openImages: new Set() };
+    window.communityScreen = { openDisplays: new Set(), openImages: new Set() };
   }
+  // Migrate older property names if a stale state object exists.
+  if (!window.communityScreen.openDisplays) window.communityScreen.openDisplays = new Set();
+  if (!window.communityScreen.openImages) window.communityScreen.openImages = new Set();
   return window.communityScreen;
 }
 
 /**
- * Update the modal-backdrop body class based on whether any popup is open
- * and the popup-backdrop setting is enabled.
+ * Toggle the canvas-dim body class based on whether any popup is open AND
+ * the `popup-backdrop` setting is enabled.
  *
  * @returns {void}
  */
 function updateBackdrop() {
   if (!isTableUser()) return;
   const enabled = getSetting("popup-backdrop", true);
-  const state = getState();
-  const anyOpen = state.openSheets.size > 0 || state.openImages.size > 0;
+  const s = getState();
+  const anyOpen = s.openDisplays.size > 0 || s.openImages.size > 0;
   document.body.classList.toggle(BODY_CLASS_MODAL_BG, Boolean(enabled && anyOpen));
 }
 
 /**
- * Center an AppV2 / legacy sheet on the viewport at a reasonable size.
- *
- * @param {object} sheet
- * @returns {void}
+ * Custom ApplicationV2 that renders pre-built HTML inline. No document
+ * dependency — the GM client builds and ships the HTML.
  */
-function centerSheet(sheet) {
-  if (!sheet) return;
-  try {
-    const width = 900;
-    const height = 700;
-    const left = Math.max(0, Math.floor((window.innerWidth - width) / 2));
-    const top = Math.max(0, Math.floor((window.innerHeight - height) / 2));
-    if (typeof sheet.setPosition === "function") {
-      sheet.setPosition({ left, top, width, height });
-    }
-  } catch (err) {
-    logger.debug("centerSheet failed (non-fatal):", err);
+class TableDisplay extends foundry.applications.api.HandlebarsApplicationMixin(
+  foundry.applications.api.ApplicationV2,
+) {
+  static DEFAULT_OPTIONS = {
+    id: "community-screen-display-{id}",
+    classes: ["community-screen", "community-screen-display"],
+    tag: "section",
+    window: {
+      icon: "fa-solid fa-tv",
+      resizable: true,
+      minimizable: false,
+    },
+    position: { width: 900, height: 700 },
+  };
+
+  static PARTS = {
+    main: { template: `modules/${MODULE_ID}/templates/popup-display.hbs` },
+  };
+
+  /**
+   * @param {{title: string, subtitle?: string, html: string}} data
+   * @param {object} [options]
+   */
+  constructor(data, options = {}) {
+    const merged = foundry.utils.mergeObject(
+      { window: { title: data.title || "Community Screen" } },
+      options,
+    );
+    super(merged);
+    this._csData = data;
+  }
+
+  /** @override */
+  async _prepareContext() {
+    return {
+      title: this._csData.title || "",
+      subtitle: this._csData.subtitle || "",
+      html: this._csData.html || "",
+    };
   }
 }
 
 /**
- * Track a sheet's lifecycle so closeAllPopups can clean it up, and so the
- * backdrop turns off when the user manually closes it.
+ * Position a window centered on the viewport at a comfortable size.
  *
- * @param {object} sheet
+ * @param {object} app
  * @returns {void}
  */
-function trackSheet(sheet) {
-  if (!sheet) return;
-  const state = getState();
-  state.openSheets.add(sheet);
-  updateBackdrop();
-  const id = sheet.id ?? `community-screen-sheet-${Math.random().toString(36).slice(2, 9)}`;
-  const closeName = `close${sheet.constructor?.name ?? "Application"}`;
-  Hooks.once(closeName, (app) => {
-    if (app !== sheet) return;
-    state.openSheets.delete(sheet);
-    updateBackdrop();
-  });
-  // Fallback: also clean up after a generous timeout if the close hook
-  // shape doesn't match (different sheet classes).
-  Hooks.once("closeApplication", (app) => {
-    if (app !== sheet) return;
-    state.openSheets.delete(sheet);
-    updateBackdrop();
-  });
-  logger.debug(`Tracking popup sheet ${id}.`);
+function centerWindow(app) {
+  if (!app) return;
+  try {
+    const width = Math.min(900, Math.max(640, Math.floor(window.innerWidth * 0.6)));
+    const height = Math.min(720, Math.max(480, Math.floor(window.innerHeight * 0.75)));
+    const left = Math.max(0, Math.floor((window.innerWidth - width) / 2));
+    const top = Math.max(0, Math.floor((window.innerHeight - height) / 2));
+    if (typeof app.setPosition === "function") {
+      app.setPosition({ left, top, width, height });
+    }
+  } catch (err) {
+    logger.debug("centerWindow failed (non-fatal):", err);
+  }
 }
 
 /**
- * Open a Journal on the Table.
+ * Track a TableDisplay so closeAllPopups can clean it up, and so the
+ * modal backdrop turns off when the last popup closes.
  *
- * @param {{uuid: string, pageId?: string}} payload
+ * @param {TableDisplay} app
+ * @returns {void}
+ */
+function trackDisplay(app) {
+  if (!app) return;
+  const s = getState();
+  s.openDisplays.add(app);
+  updateBackdrop();
+  // Foundry fires `close<ClassName>` on AppV2 close.
+  const cleanup = (closed) => {
+    if (closed !== app) return;
+    s.openDisplays.delete(app);
+    updateBackdrop();
+  };
+  Hooks.once("closeTableDisplay", cleanup);
+  Hooks.once("closeApplicationV2", cleanup);
+}
+
+/**
+ * Track an ImagePopout instance.
+ *
+ * @param {object} ip
+ * @returns {void}
+ */
+function trackImage(ip) {
+  if (!ip) return;
+  const s = getState();
+  s.openImages.add(ip);
+  updateBackdrop();
+  const cleanup = (closed) => {
+    if (closed !== ip) return;
+    s.openImages.delete(ip);
+    updateBackdrop();
+  };
+  Hooks.once("closeImagePopout", cleanup);
+  Hooks.once("closeApplicationV2", cleanup);
+}
+
+// =====================================================================
+// Socket handlers — invoked on the Table client by the GM via socketlib.
+// =====================================================================
+
+/**
+ * Render a journal-style display window with pre-built HTML.
+ *
+ * @param {{title: string, subtitle?: string, html: string}} payload
  * @returns {Promise<void>}
  */
-async function _showJournal({ uuid, pageId } = {}) {
+async function _showJournal({ title, subtitle, html } = {}) {
   if (!isTableUser()) return;
-  logger.info(`showJournal: rendering ${uuid}`);
+  logger.info(`showJournal: "${title}"`);
   try {
-    const doc = await fromUuidWithRetry(uuid);
-    if (!doc) {
-      logger.warn(`showJournal: could not resolve ${uuid} on Table client.`);
-      return;
-    }
-    const sheet = doc.sheet;
-    if (!sheet) {
-      logger.warn(
-        `showJournal: ${doc.documentName} "${doc.name}" has no sheet on Table client (permission?).`,
-      );
-      return;
-    }
-    await sheet.render(true);
-    centerSheet(sheet);
-    trackSheet(sheet);
-    if (pageId && typeof sheet.goToPage === "function") {
-      try {
-        sheet.goToPage(pageId);
-      } catch {
-        // page not found; ignore
-      }
-    }
-    logger.info(`showJournal: rendered "${doc.name}".`);
+    const app = new TableDisplay({ title, subtitle, html });
+    await app.render(true);
+    centerWindow(app);
+    trackDisplay(app);
   } catch (err) {
     logger.warn("showJournal failed:", err);
   }
 }
 
 /**
- * Open an Item sheet on the Table.
+ * Render an item-style display window with pre-built HTML.
  *
- * @param {{uuid: string}} payload
+ * @param {{title: string, subtitle?: string, html: string}} payload
  * @returns {Promise<void>}
  */
-async function _showItem({ uuid } = {}) {
+async function _showItem({ title, subtitle, html } = {}) {
   if (!isTableUser()) return;
-  logger.info(`showItem: rendering ${uuid}`);
+  logger.info(`showItem: "${title}"`);
   try {
-    const item = await fromUuidWithRetry(uuid);
-    const sheet = item?.sheet;
-    if (!sheet) {
-      logger.warn(`showItem: ${uuid} not resolvable on Table client (permission?).`);
-      return;
-    }
-    await sheet.render(true);
-    centerSheet(sheet);
-    trackSheet(sheet);
-    logger.info(`showItem: rendered "${item.name}".`);
+    const app = new TableDisplay({ title, subtitle, html });
+    await app.render(true);
+    centerWindow(app);
+    trackDisplay(app);
   } catch (err) {
     logger.warn("showItem failed:", err);
   }
 }
 
 /**
- * Open an ImagePopout on the Table.
+ * Show an image via Foundry's native ImagePopout. Takes a URL — no
+ * document permission needed.
  *
  * @param {{src: string, caption?: string}} payload
  * @returns {Promise<void>}
@@ -182,48 +214,38 @@ async function _showItem({ uuid } = {}) {
 async function _showImage({ src, caption } = {}) {
   if (!isTableUser()) return;
   if (!src) return;
+  logger.info(`showImage: ${src}`);
   try {
     const ImagePopoutCls = foundry?.applications?.apps?.ImagePopout ?? globalThis.ImagePopout;
     if (!ImagePopoutCls) {
       logger.error("No ImagePopout class available.");
       return;
     }
-    const ip = new ImagePopoutCls(src, {
-      title: caption ?? "",
-      shareable: false,
-    });
+    const ip = new ImagePopoutCls(src, { title: caption ?? "", shareable: false });
     await ip.render(true);
-    const state = getState();
-    state.openImages.add(ip);
-    updateBackdrop();
-
-    // Track close
-    const cleanup = (app) => {
-      if (app !== ip) return;
-      state.openImages.delete(ip);
-      updateBackdrop();
-    };
-    Hooks.once("closeImagePopout", cleanup);
-    Hooks.once("closeApplication", cleanup);
+    trackImage(ip);
   } catch (err) {
     logger.warn("showImage failed:", err);
   }
 }
 
 /**
- * Open an actor's portrait image on the Table.
+ * Backwards-compatible portrait handler: the GM now ships the image URL
+ * directly via `showImage` (so the Table never has to resolve the actor),
+ * but we still register this so older callers don't break.
  *
- * @param {{actorUuid: string}} payload
+ * @param {{src?: string, caption?: string, actorUuid?: string}} payload
  * @returns {Promise<void>}
  */
-async function _showPortrait({ actorUuid } = {}) {
+async function _showPortrait({ src, caption, actorUuid } = {}) {
   if (!isTableUser()) return;
-  logger.info(`showPortrait: ${actorUuid}`);
+  if (src) return _showImage({ src, caption });
+  // Fallback: try fromUuid on Table side (will only work if Table has perms).
   try {
-    const actor = await fromUuidWithRetry(actorUuid);
+    const actor = actorUuid ? await fromUuid(actorUuid) : null;
     const img = actor?.img;
     if (!img) {
-      logger.warn(`showPortrait: ${actorUuid} has no img or actor not resolvable.`);
+      logger.warn(`showPortrait: no src and ${actorUuid} not resolvable on Table.`);
       return;
     }
     await _showImage({ src: img, caption: actor.name });
@@ -239,31 +261,36 @@ async function _showPortrait({ actorUuid } = {}) {
  */
 async function _closeAllPopups() {
   if (!isTableUser()) return;
-  const state = getState();
-  for (const sheet of [...state.openSheets]) {
+  logger.info("closeAllPopups");
+  const s = getState();
+  for (const app of [...s.openDisplays]) {
     try {
-      await sheet.close({ animate: false });
+      await app.close({ animate: false });
     } catch (err) {
-      logger.debug("Closing sheet failed:", err);
+      logger.debug("Closing display failed:", err);
     }
   }
-  for (const img of [...state.openImages]) {
+  for (const ip of [...s.openImages]) {
     try {
-      await img.close({ animate: false });
+      await ip.close({ animate: false });
     } catch (err) {
       logger.debug("Closing image failed:", err);
     }
   }
-  state.openSheets.clear();
-  state.openImages.clear();
+  s.openDisplays.clear();
+  s.openImages.clear();
   updateBackdrop();
 }
 
+// =====================================================================
+// Hook registration.
+// =====================================================================
+
 /**
- * Filter the AppV2 "pop out" header button on the Table client.
+ * Filter the AppV2 "pop out" header control on the Table client.
  *
- * @param {object} app - The application.
- * @param {Array<{action: string}>} controls - Header controls array (mutable).
+ * @param {object} app
+ * @param {Array<{action: string}>} controls
  * @returns {void}
  */
 function filterPopoutHeaderControl(app, controls) {
@@ -288,4 +315,15 @@ export function init() {
   setHandler("closeAllPopups", _closeAllPopups);
 
   Hooks.on("getHeaderControlsApplicationV2", filterPopoutHeaderControl);
+
+  // Expose for console debugging.
+  Hooks.once("ready", () => {
+    const mod = game.modules?.get?.(MODULE_ID);
+    if (mod) {
+      mod.api = mod.api ?? {};
+      mod.api.openDisplays = () => getState().openDisplays;
+      mod.api.openImages = () => getState().openImages;
+      mod.api.closeAllPopups = () => _closeAllPopups();
+    }
+  });
 }

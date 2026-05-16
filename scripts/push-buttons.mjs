@@ -1,19 +1,11 @@
-// Community Screen — injects "Push to Table" header buttons and directory context-menu entries.
+// Community Screen — injects "Push to Table" header buttons and directory
+// context-menu entries, and builds the renderable HTML on the GM side so
+// the Table client doesn't need permission to resolve the document.
 
 import { isGM, getTableUserId, isTableOnline } from "./identity.mjs";
 import { executeAsUser } from "./sockets.mjs";
-import { ensureTableObserver } from "./ownership.mjs";
-import { sleep, t } from "./lib/helpers.mjs";
+import { t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
-
-/**
- * Time in milliseconds to wait between granting OBSERVER on a document and
- * dispatching the push, so the ownership update has time to propagate to
- * the Table client's local document cache before the socket message lands.
- *
- * @type {number}
- */
-const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
 
 /**
  * @returns {boolean} True if the GM may push to a connected Table user.
@@ -22,11 +14,92 @@ function canPush() {
   return isGM() && Boolean(getTableUserId()) && isTableOnline();
 }
 
+// =====================================================================
+// HTML builders — GM-side. Each returns either an HTML string or null
+// (skip), plus optional subtitle / image for portraits.
+// =====================================================================
+
 /**
- * Send a document push to the Table. Picks the right handler based on
- * document type.
+ * Build a rendered HTML fragment for one journal page (text or image).
  *
- * @param {ClientDocument} doc - JournalEntry, Item, Actor, etc.
+ * @param {JournalEntryPage} page
+ * @returns {string}
+ */
+function buildJournalPageHtml(page) {
+  if (!page) return "";
+  const name = foundry.utils.escapeHTML?.(page.name ?? "") ?? page.name ?? "";
+  let body = "";
+  if (page.type === "image" && page.src) {
+    body = `<img class="community-screen-page-image" src="${page.src}" alt="${name}">`;
+    if (page.image?.caption) {
+      const cap = foundry.utils.escapeHTML?.(page.image.caption) ?? page.image.caption;
+      body += `<p class="community-screen-page-caption">${cap}</p>`;
+    }
+  } else if (page.type === "video" && page.src) {
+    body = `<video class="community-screen-page-video" src="${page.src}" controls loop></video>`;
+  } else if (page.type === "pdf" && page.src) {
+    body = `<a class="community-screen-page-pdf" href="${page.src}" target="_blank" rel="noopener">${name}</a>`;
+  } else {
+    // text page (or unknown — fall back to text.content)
+    body = page.text?.content ?? "";
+  }
+  return `<section class="community-screen-journal-page">
+    <h2 class="community-screen-page-name">${name}</h2>
+    <div class="community-screen-page-body">${body}</div>
+  </section>`;
+}
+
+/**
+ * Build an HTML fragment that displays a JournalEntry's pages stacked.
+ *
+ * @param {JournalEntry} journal
+ * @returns {string}
+ */
+function buildJournalHtml(journal) {
+  const pages = journal.pages?.contents ?? [];
+  if (pages.length === 0) {
+    return `<p class="community-screen-empty">${t("notifications.empty-journal") || "Empty journal."}</p>`;
+  }
+  // Honor manual sort if any.
+  const sorted = [...pages].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+  return sorted.map(buildJournalPageHtml).join("\n");
+}
+
+/**
+ * Build an HTML fragment for an item — image + description + simple
+ * key/value list of common system fields. System-agnostic.
+ *
+ * @param {Item} item
+ * @returns {string}
+ */
+function buildItemHtml(item) {
+  const name = foundry.utils.escapeHTML?.(item.name ?? "") ?? item.name ?? "";
+  const img = item.img ?? "";
+  // Description is system-specific. Try common D&D-style paths first.
+  const desc =
+    item.system?.description?.value ??
+    item.system?.description?.unidentified ??
+    item.system?.description ??
+    "";
+  let imgTag = "";
+  if (img) imgTag = `<img class="community-screen-item-image" src="${img}" alt="${name}">`;
+  return `<div class="community-screen-item">
+    <header class="community-screen-item-header">
+      ${imgTag}
+      <h2 class="community-screen-item-name">${name}</h2>
+    </header>
+    <div class="community-screen-item-description">${typeof desc === "string" ? desc : ""}</div>
+  </div>`;
+}
+
+// =====================================================================
+// Push dispatcher.
+// =====================================================================
+
+/**
+ * Send the renderable representation of a document to the Table.
+ *
+ * @param {ClientDocument} doc
  * @returns {Promise<void>}
  */
 async function pushDocument(doc) {
@@ -36,34 +109,23 @@ async function pushDocument(doc) {
     ui.notifications?.warn(t("errors.no-table-user"));
     return;
   }
-  const uuid = doc.uuid;
   const type = doc.documentName;
-  logger.info(`Pushing ${type} "${doc.name ?? doc.id}" to Table (${tableId}).`);
+  logger.info(`Pushing ${type} "${doc.name ?? doc.id}" to Table.`);
   try {
-    // Grant the Table user OBSERVER on the document so fromUuid() resolves
-    // on their client and the sheet has permission to render. Scenes don't
-    // need this for followScene.
-    if (type !== "Scene") {
-      await ensureTableObserver(doc);
-      // Give the ownership update a moment to propagate to the Table
-      // client's local cache before we send the socket message — otherwise
-      // the Table's fromUuid() may still see the pre-grant state.
-      await sleep(OWNERSHIP_PROPAGATION_DELAY_MS);
-    }
-
     if (type === "JournalEntry") {
-      await executeAsUser("showJournal", tableId, { uuid });
+      const html = buildJournalHtml(doc);
+      await executeAsUser("showJournal", tableId, { title: doc.name ?? "", html });
     } else if (type === "Item") {
-      await executeAsUser("showItem", tableId, { uuid });
+      const html = buildItemHtml(doc);
+      await executeAsUser("showItem", tableId, { title: doc.name ?? "", html });
     } else if (type === "Actor") {
-      // Portraits don't depend on sheet permissions — resolve the actor on
-      // the GM side and ship the image URL + caption directly so the Table
-      // never has to fromUuid() the actor.
-      const img = doc.img;
-      if (img) {
-        await executeAsUser("showImage", tableId, { src: img, caption: doc.name });
+      // Portrait via image URL — no document lookup on Table side.
+      const src = doc.img;
+      if (src) {
+        await executeAsUser("showImage", tableId, { src, caption: doc.name });
       } else {
-        await executeAsUser("showPortrait", tableId, { actorUuid: uuid });
+        logger.warn(`pushDocument: actor "${doc.name}" has no img.`);
+        return;
       }
     } else if (type === "Scene") {
       await executeAsUser("followScene", tableId, { sceneId: doc.id });
@@ -77,9 +139,12 @@ async function pushDocument(doc) {
   }
 }
 
+// =====================================================================
+// Header-button and directory-context injection.
+// =====================================================================
+
 /**
- * Inject "Push to Table" into an AppV2 sheet's header controls. Idempotent —
- * skipped if the action already exists.
+ * Inject "Push to Table" into an AppV2 sheet's header controls.
  *
  * @param {object} app
  * @param {Array<object>} controls
@@ -125,71 +190,36 @@ function injectV1HeaderButton(app, buttons) {
 }
 
 /**
- * Inject a "Push to Table" entry into a directory context menu.
+ * Directory-specific context-menu injector that knows which collection to
+ * look the id up in.
  *
- * @param {HTMLElement | object} _html
- * @param {Array<object>} entries
- * @returns {void}
- */
-function injectDirectoryContextEntry(_html, entries) {
-  if (!canPush()) return;
-  if (!Array.isArray(entries)) return;
-  if (entries.some((e) => e?.name === "community-screen-push")) return;
-  entries.push({
-    name: t("context.push-to-table"),
-    icon: '<i class="fa-solid fa-tv"></i>',
-    condition: () => canPush(),
-    callback: async (target) => {
-      // `target` is either an HTMLLIElement (legacy) or already the doc id.
-      const id =
-        target?.dataset?.entryId ??
-        target?.dataset?.documentId ??
-        target?.[0]?.dataset?.entryId ??
-        target?.[0]?.dataset?.documentId;
-      if (!id) return;
-      // Decide collection by directory: we don't have it here; let the call
-      // site figure it out via the directory hook variant below.
-      logger.warn("Directory CSM fallback hit without a specific collection.");
-    },
-  });
-}
-
-/**
- * Factory for directory-specific context-menu injectors that already know
- * which collection to look up the id in.
- *
- * @param {string} collection - e.g. "journal", "actors", "items", "scenes".
+ * @param {string} collection
  * @returns {(html: any, entries: Array<object>) => void}
  */
 function makeDirectoryInjector(collection) {
   return (_html, entries) => {
     if (!canPush()) return;
     if (!Array.isArray(entries)) return;
-    if (entries.some((e) => e?.name === `community-screen-push-${collection}`)) return;
+    if (entries.some((e) => e?._csm === `community-screen-push-${collection}`)) return;
     entries.push({
       name: t("context.push-to-table"),
       icon: '<i class="fa-solid fa-tv"></i>',
       condition: () => canPush(),
-      // Internal marker to skip duplicate injection.
       _csm: `community-screen-push-${collection}`,
       callback: async (target) => {
         const el = target instanceof HTMLElement ? target : target?.[0];
         const id = el?.dataset?.entryId ?? el?.dataset?.documentId;
         if (!id) return;
-        const coll = game.collections?.get?.(collectionToDocName(collection));
+        const docName = collectionToDocName(collection);
+        const coll = game.collections?.get?.(docName);
         const doc = coll?.get?.(id);
         if (doc) await pushDocument(doc);
       },
     });
-    // Mirror our marker into the name so the dedupe check sees it.
-    const last = entries[entries.length - 1];
-    if (last) last.name = t("context.push-to-table");
   };
 }
 
 /**
- * Map a directory collection nickname → Document class name.
- *
  * @param {string} nick
  * @returns {string}
  */
@@ -214,12 +244,8 @@ function collectionToDocName(nick) {
  * @returns {void}
  */
 export function init() {
-  // AppV2 header controls. Foundry's hook namer dispatches both a generic
-  // (getHeaderControlsApplicationV2) and class-specific names depending on
-  // the system's sheet class — listen broadly.
   Hooks.on("getHeaderControlsApplicationV2", injectAppV2HeaderControl);
   Hooks.on("getApplicationHeaderControls", injectAppV2HeaderControl);
-  // Some sheets fire class-specific variants — register the common ones.
   const v2DocClasses = [
     "JournalEntrySheet",
     "JournalSheet",
@@ -231,17 +257,15 @@ export function init() {
     Hooks.on(`getHeaderControls${cls}`, injectAppV2HeaderControl);
   }
 
-  // Legacy v1 sheet header buttons (some systems still use these).
+  // Legacy v1 sheet header buttons.
   Hooks.on("getJournalSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getItemSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getActorSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getSceneConfigHeaderButtons", injectV1HeaderButton);
 
-  // Directory context menus (right-click in sidebar).
+  // Directory context menus.
   Hooks.on("getJournalDirectoryEntryContext", makeDirectoryInjector("journal"));
   Hooks.on("getActorDirectoryEntryContext", makeDirectoryInjector("actors"));
   Hooks.on("getItemDirectoryEntryContext", makeDirectoryInjector("items"));
   Hooks.on("getSceneDirectoryEntryContext", makeDirectoryInjector("scenes"));
-  // Fallback generic registration (unused unless wired).
-  void injectDirectoryContextEntry;
 }

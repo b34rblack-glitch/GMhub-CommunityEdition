@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Push to Table now ships rendered HTML, not a document uuid.** The
+  previous "send uuid, have Table `fromUuid` it, render the system's own
+  sheet" approach was fragile: it depended on a just-in-time OBSERVER
+  ownership grant racing the socket message, and on each system's sheet
+  rendering correctly for non-owners. The new approach mirrors what
+  Monk's Common Display / Theatre Inserts / Foundry's own
+  `JournalEntry.show()` flow do — the GM client builds the renderable
+  content (HTML for journal pages, item description, image URL for
+  portraits) and ships THAT over the socket. The Table renders the
+  inline content in a small `community-screen` `ApplicationV2` window
+  (`TableDisplay`), with no document lookup and no permission
+  dependency.
+- Portrait pushes now go through `showImage` with the actor's `img` URL
+  directly (the previous `showPortrait` handler is kept as a backwards-
+  compatible fallback).
+- `closeAllPopups` now walks both the open `TableDisplay` instances and
+  open `ImagePopout` instances. Console fallback exposed at
+  `game.modules.get("community-screen").api.closeAllPopups()`.
+
+### Changed (prior unreleased entries)
+
 - **Dropped optional Sequencer and JB2A integration; baked the visual
   in.** The module is now fully self-contained. The previous "auto-
   upgrade to Sequencer + JB2A" code path used JB2A's rune-circle sprite
