@@ -1,11 +1,22 @@
 // Community Screen — injects "Push to Table" header buttons and directory
-// context-menu entries, and builds the renderable HTML on the GM side so
-// the Table client doesn't need permission to resolve the document.
+// context-menu entries.
+//
+// The actual push goes through Foundry's native share mechanisms (v14):
+//   - JournalEntry.prototype.show(true, [tableUser])
+//   - foundry.applications.apps.ImagePopout.shareImage(data, [userId])
+//
+// These bypass the document-permission / fromUuid path that previous
+// versions struggled with. Items have no native share so they ride
+// the ImagePopout path with the item description in the caption.
 
-import { isGM, getTableUserId, isTableOnline } from "./identity.mjs";
+import { isGM, getTableUserId, isTableOnline, getTableUser } from "./identity.mjs";
 import { executeAsUser } from "./sockets.mjs";
-import { t } from "./lib/helpers.mjs";
+import { ensureTableObserver } from "./ownership.mjs";
+import { sleep, t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
+
+/** Settle delay after an ownership grant so the update propagates. */
+const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
 
 /**
  * @returns {boolean} True if the GM may push to a connected Table user.
@@ -14,82 +25,43 @@ function canPush() {
   return isGM() && Boolean(getTableUserId()) && isTableOnline();
 }
 
-// =====================================================================
-// HTML builders — GM-side. Each returns either an HTML string or null
-// (skip), plus optional subtitle / image for portraits.
-// =====================================================================
-
 /**
- * Build a rendered HTML fragment for one journal page (text or image).
- *
- * @param {JournalEntryPage} page
- * @returns {string}
+ * @returns {object|null} The Foundry ImagePopout class in v14.
  */
-function buildJournalPageHtml(page) {
-  if (!page) return "";
-  const name = foundry.utils.escapeHTML?.(page.name ?? "") ?? page.name ?? "";
-  let body = "";
-  if (page.type === "image" && page.src) {
-    body = `<img class="community-screen-page-image" src="${page.src}" alt="${name}">`;
-    if (page.image?.caption) {
-      const cap = foundry.utils.escapeHTML?.(page.image.caption) ?? page.image.caption;
-      body += `<p class="community-screen-page-caption">${cap}</p>`;
-    }
-  } else if (page.type === "video" && page.src) {
-    body = `<video class="community-screen-page-video" src="${page.src}" controls loop></video>`;
-  } else if (page.type === "pdf" && page.src) {
-    body = `<a class="community-screen-page-pdf" href="${page.src}" target="_blank" rel="noopener">${name}</a>`;
-  } else {
-    // text page (or unknown — fall back to text.content)
-    body = page.text?.content ?? "";
-  }
-  return `<section class="community-screen-journal-page">
-    <h2 class="community-screen-page-name">${name}</h2>
-    <div class="community-screen-page-body">${body}</div>
-  </section>`;
+function getImagePopoutClass() {
+  return foundry?.applications?.apps?.ImagePopout ?? globalThis.ImagePopout ?? null;
 }
 
 /**
- * Build an HTML fragment that displays a JournalEntry's pages stacked.
+ * Convert a possibly-HTML description string to a short plain-text
+ * caption. The DOM API is used since the GM client always has one.
  *
- * @param {JournalEntry} journal
+ * @param {string} html
+ * @param {number} [max]
  * @returns {string}
  */
-function buildJournalHtml(journal) {
-  const pages = journal.pages?.contents ?? [];
-  if (pages.length === 0) {
-    return `<p class="community-screen-empty">${t("notifications.empty-journal") || "Empty journal."}</p>`;
+function htmlToCaption(html, max = 400) {
+  if (!html) return "";
+  try {
+    const div = document.createElement("div");
+    div.innerHTML = String(html);
+    const text = (div.textContent || "").replace(/\s+/g, " ").trim();
+    return text.length > max ? text.slice(0, max - 1) + "…" : text;
+  } catch {
+    return String(html).slice(0, max);
   }
-  // Honor manual sort if any.
-  const sorted = [...pages].sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
-  return sorted.map(buildJournalPageHtml).join("\n");
 }
 
 /**
- * Build an HTML fragment for an item — image + description + simple
- * key/value list of common system fields. System-agnostic.
+ * Extract a description string from an item across systems.
  *
  * @param {Item} item
  * @returns {string}
  */
-function buildItemHtml(item) {
-  const name = foundry.utils.escapeHTML?.(item.name ?? "") ?? item.name ?? "";
-  const img = item.img ?? "";
-  // Description is system-specific. Try common D&D-style paths first.
-  const desc =
-    item.system?.description?.value ??
-    item.system?.description?.unidentified ??
-    item.system?.description ??
-    "";
-  let imgTag = "";
-  if (img) imgTag = `<img class="community-screen-item-image" src="${img}" alt="${name}">`;
-  return `<div class="community-screen-item">
-    <header class="community-screen-item-header">
-      ${imgTag}
-      <h2 class="community-screen-item-name">${name}</h2>
-    </header>
-    <div class="community-screen-item-description">${typeof desc === "string" ? desc : ""}</div>
-  </div>`;
+function extractItemDescription(item) {
+  const d = item?.system?.description;
+  if (typeof d === "string") return d;
+  return d?.value ?? d?.unidentified ?? d?.short ?? "";
 }
 
 // =====================================================================
@@ -97,37 +69,75 @@ function buildItemHtml(item) {
 // =====================================================================
 
 /**
- * Send the renderable representation of a document to the Table.
+ * Push a document to the Table using Foundry's native share APIs.
  *
  * @param {ClientDocument} doc
  * @returns {Promise<void>}
  */
 async function pushDocument(doc) {
   if (!doc) return;
-  const tableId = getTableUserId();
-  if (!tableId) {
+  const tableUser = getTableUser();
+  if (!tableUser) {
     ui.notifications?.warn(t("errors.no-table-user"));
     return;
   }
+  const tableId = tableUser.id;
   const type = doc.documentName;
-  logger.info(`Pushing ${type} "${doc.name ?? doc.id}" to Table.`);
+  logger.info(`Pushing ${type} "${doc.name ?? doc.id}" to Table (${tableUser.name}).`);
+
   try {
     if (type === "JournalEntry") {
-      const html = buildJournalHtml(doc);
-      await executeAsUser("showJournal", tableId, { title: doc.name ?? "", html });
-    } else if (type === "Item") {
-      const html = buildItemHtml(doc);
-      await executeAsUser("showItem", tableId, { title: doc.name ?? "", html });
-    } else if (type === "Actor") {
-      // Portrait via image URL — no document lookup on Table side.
-      const src = doc.img;
-      if (src) {
-        await executeAsUser("showImage", tableId, { src, caption: doc.name });
+      // Foundry's native show() emits the "showEntry" socket event to the
+      // specified users. The receiving client renders the entry directly
+      // through its own sheet — bypasses the document-permission /
+      // fromUuid race that the old custom-socket path hit.
+      //
+      // Foundry requires the receiving user to have the doc in their
+      // collection, so ensure at least LIMITED ownership first.
+      await ensureTableObserver(doc);
+      await sleep(OWNERSHIP_PROPAGATION_DELAY_MS);
+      if (typeof doc.show === "function") {
+        await doc.show(true, [tableUser]);
       } else {
-        logger.warn(`pushDocument: actor "${doc.name}" has no img.`);
+        logger.warn("JournalEntry.show() unavailable — Foundry v14 expected.");
         return;
       }
+    } else if (type === "Item") {
+      // Items have no native .show() in core. Use ImagePopout.shareImage
+      // with the item's image and a plain-text description in the caption.
+      // No permission needed — shareImage just ships URLs/text.
+      const ImagePopoutCls = getImagePopoutClass();
+      if (!ImagePopoutCls?.shareImage) {
+        logger.warn("ImagePopout.shareImage unavailable — Foundry v14 expected.");
+        return;
+      }
+      const caption = htmlToCaption(extractItemDescription(doc));
+      ImagePopoutCls.shareImage(
+        {
+          image: doc.img,
+          title: doc.name ?? "",
+          caption,
+          uuid: doc.uuid,
+        },
+        [tableId],
+      );
+    } else if (type === "Actor") {
+      // Portrait via native shareImage.
+      const ImagePopoutCls = getImagePopoutClass();
+      if (!ImagePopoutCls?.shareImage) {
+        logger.warn("ImagePopout.shareImage unavailable — Foundry v14 expected.");
+        return;
+      }
+      ImagePopoutCls.shareImage(
+        {
+          image: doc.img,
+          title: doc.name ?? "",
+          uuid: doc.uuid,
+        },
+        [tableId],
+      );
     } else if (type === "Scene") {
+      // Scene is a different beast — followScene on the Table.
       await executeAsUser("followScene", tableId, { sceneId: doc.id });
     } else {
       logger.warn(`pushDocument: unsupported document type ${type}`);
@@ -135,8 +145,25 @@ async function pushDocument(doc) {
     }
     ui.notifications?.info(t("notifications.pushed"));
   } catch (err) {
+    logger.warn("pushDocument failed:", err);
     ui.notifications?.warn(t("errors.push-failed", { message: err?.message ?? String(err) }));
   }
+}
+
+/**
+ * Push an arbitrary image URL (used by macros / future drag-to-push).
+ *
+ * @param {string} src
+ * @param {string} [title]
+ * @returns {Promise<void>}
+ */
+export async function pushImage(src, title = "") {
+  if (!canPush()) return;
+  const tableUser = getTableUser();
+  if (!tableUser) return;
+  const ImagePopoutCls = getImagePopoutClass();
+  if (!ImagePopoutCls?.shareImage) return;
+  ImagePopoutCls.shareImage({ image: src, title }, [tableUser.id]);
 }
 
 // =====================================================================
@@ -144,8 +171,6 @@ async function pushDocument(doc) {
 // =====================================================================
 
 /**
- * Inject "Push to Table" into an AppV2 sheet's header controls.
- *
  * @param {object} app
  * @param {Array<object>} controls
  * @returns {void}
@@ -167,8 +192,6 @@ function injectAppV2HeaderControl(app, controls) {
 }
 
 /**
- * Inject "Push to Table" into a legacy v1 sheet's header buttons.
- *
  * @param {object} app
  * @param {Array<object>} buttons
  * @returns {void}
@@ -190,9 +213,6 @@ function injectV1HeaderButton(app, buttons) {
 }
 
 /**
- * Directory-specific context-menu injector that knows which collection to
- * look the id up in.
- *
  * @param {string} collection
  * @returns {(html: any, entries: Array<object>) => void}
  */
@@ -239,8 +259,6 @@ function collectionToDocName(nick) {
 }
 
 /**
- * Register every push-button hook.
- *
  * @returns {void}
  */
 export function init() {
@@ -268,4 +286,14 @@ export function init() {
   Hooks.on("getActorDirectoryEntryContext", makeDirectoryInjector("actors"));
   Hooks.on("getItemDirectoryEntryContext", makeDirectoryInjector("items"));
   Hooks.on("getSceneDirectoryEntryContext", makeDirectoryInjector("scenes"));
+
+  // Console fallback for diagnostics / macros.
+  Hooks.once("ready", () => {
+    const mod = game.modules?.get?.("community-screen");
+    if (mod) {
+      mod.api = mod.api ?? {};
+      mod.api.pushDocument = (doc) => pushDocument(doc);
+      mod.api.pushImage = (src, title) => pushImage(src, title);
+    }
+  });
 }
