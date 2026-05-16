@@ -3,8 +3,17 @@
 import { isGM, getTableUserId, isTableOnline } from "./identity.mjs";
 import { executeAsUser } from "./sockets.mjs";
 import { ensureTableObserver } from "./ownership.mjs";
-import { t } from "./lib/helpers.mjs";
+import { sleep, t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
+
+/**
+ * Time in milliseconds to wait between granting OBSERVER on a document and
+ * dispatching the push, so the ownership update has time to propagate to
+ * the Table client's local document cache before the socket message lands.
+ *
+ * @type {number}
+ */
+const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
 
 /**
  * @returns {boolean} True if the GM may push to a connected Table user.
@@ -29,20 +38,33 @@ async function pushDocument(doc) {
   }
   const uuid = doc.uuid;
   const type = doc.documentName;
+  logger.info(`Pushing ${type} "${doc.name ?? doc.id}" to Table (${tableId}).`);
   try {
     // Grant the Table user OBSERVER on the document so fromUuid() resolves
     // on their client and the sheet has permission to render. Scenes don't
-    // need this for followScene; portraits operate on the actor's image
-    // path and don't require sheet-level access, but bumping ownership
-    // ensures consistent behavior across system-specific sheets.
-    if (type !== "Scene") await ensureTableObserver(doc);
+    // need this for followScene.
+    if (type !== "Scene") {
+      await ensureTableObserver(doc);
+      // Give the ownership update a moment to propagate to the Table
+      // client's local cache before we send the socket message — otherwise
+      // the Table's fromUuid() may still see the pre-grant state.
+      await sleep(OWNERSHIP_PROPAGATION_DELAY_MS);
+    }
 
     if (type === "JournalEntry") {
       await executeAsUser("showJournal", tableId, { uuid });
     } else if (type === "Item") {
       await executeAsUser("showItem", tableId, { uuid });
     } else if (type === "Actor") {
-      await executeAsUser("showPortrait", tableId, { actorUuid: uuid });
+      // Portraits don't depend on sheet permissions — resolve the actor on
+      // the GM side and ship the image URL + caption directly so the Table
+      // never has to fromUuid() the actor.
+      const img = doc.img;
+      if (img) {
+        await executeAsUser("showImage", tableId, { src: img, caption: doc.name });
+      } else {
+        await executeAsUser("showPortrait", tableId, { actorUuid: uuid });
+      }
     } else if (type === "Scene") {
       await executeAsUser("followScene", tableId, { sceneId: doc.id });
     } else {

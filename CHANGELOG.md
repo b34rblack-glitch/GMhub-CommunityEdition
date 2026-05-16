@@ -7,7 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dropped optional Sequencer and JB2A integration.** The module is now
+  fully self-contained — no recommended modules. The previous "auto-
+  upgrade to Sequencer + JB2A" code path has been removed in favor of a
+  richer native PIXI v7 style. Added a new **`ornate`** highlight style
+  with multi-ring graphics, counter-rotating outer halo, and a
+  `PIXI.BlurFilter` glow. Existing `subtle` / `default` / `dramatic`
+  styles unchanged.
+- `module.json.relationships.recommends` is now empty. The only
+  module dependencies are `socketlib` and `lib-wrapper` (both required).
+
 ### Fixed
+
+- **Push to Table reliability.** Added a 200ms settle delay between the
+  GM-side `ensureTableObserver()` write and the immediately-following
+  `executeAsUser()` socket call so the ownership update has time to
+  propagate to the Table client's local cache. Table-side `_show*`
+  handlers retry `fromUuid` once with a 400ms wait if the first attempt
+  returns null. Portraits now ship the actor's `img` URL inline so the
+  Table never has to `fromUuid` the actor at all. Prominent
+  `[Community Screen]` info-level logging on both sides for diagnosis.
+- **Combat vision reliability.** Same propagation-delay pattern in
+  `broadcastFocus()` when a just-in-time `ensureTableObserver()` grant
+  was actually applied. The Table-side `_setVisionFocus` now warns
+  loudly when `Token.control()` is denied (the symptom of a
+  not-yet-propagated permission grant).
+- **`sleep()` helper** added to `scripts/lib/helpers.mjs`.
+
+### Fixed (previous)
 
 - **Refit Scene button now actually refits.** The control palette
   previously dispatched `followScene`, which is a no-op when the Table

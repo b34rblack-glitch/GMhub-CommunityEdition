@@ -4,7 +4,11 @@
 import { isGM, isTableUser, getTableUserId, isTableOnline } from "./identity.mjs";
 import { executeAsUser, setHandler } from "./sockets.mjs";
 import { ensureTableObserver } from "./ownership.mjs";
+import { sleep } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
+
+/** Time to wait between granting OBSERVER and broadcasting focus. */
+const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
 
 /**
  * Resolve the token id of the currently-active combatant in a Combat
@@ -34,16 +38,27 @@ function activeCombatantTokenId(combat) {
  */
 function _setVisionFocus({ tokenId } = {}) {
   if (!isTableUser()) return;
+  logger.info(`setVisionFocus(${tokenId ?? "null"})`);
   try {
     if (!tokenId) {
       (canvas?.tokens?.controlled ?? []).forEach((t) => t.release());
     } else {
       const tok = canvas?.tokens?.get(tokenId);
       if (!tok) {
-        logger.debug(`setVisionFocus: token ${tokenId} not on this canvas.`);
+        logger.warn(`setVisionFocus: token ${tokenId} not on this canvas.`);
         return;
       }
-      tok.control({ releaseOthers: true });
+      // Token.control() returns falsy if the user lacks permission. Capture
+      // the return so we can surface that case prominently.
+      const ok = tok.control({ releaseOthers: true });
+      if (ok === false) {
+        logger.warn(
+          `setVisionFocus: Token.control() denied for ${tokenId} ` +
+            `(actor "${tok.actor?.name ?? "?"}"). Table user lacks OBSERVER ` +
+            `on the underlying actor — should have been auto-granted by ` +
+            `the GM-side broadcast.`,
+        );
+      }
     }
     canvas?.perception?.update?.({
       refreshVision: true,
@@ -78,18 +93,28 @@ async function broadcastFocus(combat) {
   // Token.control() silently no-ops on their client (permission check
   // fails). PCs already get OWNER via ownership.syncAll(); this handles
   // NPC combatants on the fly.
+  let grantedNow = false;
   if (tokenId) {
     const combatant = c?.combatant;
     const actor = combatant?.actor ?? combatant?.token?.actor;
     if (actor) {
+      const tableId2 = tableId;
+      const before = actor.ownership?.[tableId2];
       try {
         await ensureTableObserver(actor);
+        const after = actor.ownership?.[tableId2];
+        grantedNow = after !== before;
       } catch (err) {
         logger.debug("ensureTableObserver on combatant actor failed:", err);
       }
     }
   }
 
+  // If we just bumped ownership, wait briefly so the update lands on the
+  // Table client before the socket-driven Token.control() runs.
+  if (grantedNow) await sleep(OWNERSHIP_PROPAGATION_DELAY_MS);
+
+  logger.info(`broadcastFocus: tokenId=${tokenId ?? "null"} (release-all otherwise).`);
   try {
     await executeAsUser("setVisionFocus", tableId, { tokenId });
   } catch (err) {

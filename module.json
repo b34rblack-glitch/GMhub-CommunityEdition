@@ -14,14 +14,8 @@
       "url": "https://github.com/b34rblack-glitch"
     }
   ],
-  "esmodules": [
-    "scripts/main.mjs"
-  ],
-  "styles": [
-    "styles/community-screen.css",
-    "styles/popups.css",
-    "styles/push-buttons.css"
-  ],
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/community-screen.css", "styles/popups.css", "styles/push-buttons.css"],
   "languages": [
     {
       "lang": "en",
@@ -43,16 +37,7 @@
         "manifest": "https://github.com/ruipin/fvtt-lib-wrapper/releases/latest/download/module.json"
       }
     ],
-    "recommends": [
-      {
-        "id": "sequencer",
-        "type": "module"
-      },
-      {
-        "id": "jb2a_patreon",
-        "type": "module"
-      }
-    ]
+    "recommends": []
   },
   "url": "https://github.com/b34rblack-glitch/GMhub-CommunityEdition",
   "manifest": "https://github.com/b34rblack-glitch/GMhub-CommunityEdition/releases/latest/download/module.json",

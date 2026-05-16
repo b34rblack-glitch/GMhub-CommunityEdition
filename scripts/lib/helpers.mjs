@@ -15,6 +15,16 @@ export function t(key, data) {
 }
 
 /**
+ * Sleep for `ms` milliseconds.
+ *
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Debounce a function. Trailing-edge: the last call wins after `wait` ms of idle.
  *
  * @param {Function} fn - Function to debounce.

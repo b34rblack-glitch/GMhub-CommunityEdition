@@ -51,10 +51,10 @@ player elbow, but tokens still drag freely so players can walk up and play.
 ### Combat
 
 - **Active-turn highlight.** A rotating, pulsing ring marks whose turn it
-  is. Styles: subtle / default / dramatic. Disposition coloring
-  (friendly = yellow, hostile = red, neutral = cool gray) optional.
-  Auto-upgrades to a richer Sequencer + JB2A effect if both modules are
-  active.
+  is. Four built-in styles (subtle / default / dramatic / ornate),
+  rendered natively via PIXI v7 with no external module dependencies.
+  Disposition coloring (friendly = yellow, hostile = red, neutral =
+  cool gray) optional.
 
 ### Ergonomics
 
@@ -70,10 +70,9 @@ player elbow, but tokens still drag freely so players can walk up and play.
 - **Required modules** (auto-installed via manifest dependencies):
   - [socketlib](https://github.com/farling42/foundryvtt-socketlib)
   - [lib-wrapper](https://github.com/ruipin/fvtt-lib-wrapper)
-- **Recommended (soft) modules** for visual polish:
-  - [Sequencer](https://foundryvtt.com/packages/sequencer)
-  - [JB2A Patreon](https://foundryvtt.com/packages/jb2a_patreon) (or the
-    free version — feature-detect handles either)
+
+That's it. No recommended modules — all visual effects, including the
+active-turn highlight, are rendered natively and ship with this module.
 
 ## Installation
 
@@ -133,7 +132,7 @@ and restart Foundry.
 | Default Scene Fit Mode         | world  | contain | Fit mode applied when a scene has no per-scene override.                    |
 | Custom Scale Override          | world  | 1.0     | Force a specific zoom (currently informational; auto-fit takes precedence). |
 | Show Active-Turn Highlight     | client | false   | Draw the highlight ring on this client (default on for the Table).          |
-| Active-Turn Highlight Style    | world  | default | subtle / default / dramatic / sequencer (auto if installed).                |
+| Active-Turn Highlight Style    | world  | default | subtle / default / dramatic / ornate (all native).                          |
 | Color Highlight by Disposition | world  | true    | Yellow / red / gray ring per disposition. Off → single yellow.              |
 | Suppress Chat Input on Table   | world  | true    | Hides chat input on the Table client.                                       |
 | Auto-grant OWNER on PCs        | world  | true    | Grant the Table user OWNER on every player-owned actor at ready.            |

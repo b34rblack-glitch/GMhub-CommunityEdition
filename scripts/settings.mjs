@@ -67,7 +67,7 @@ export function init() {
       subtle: "COMMUNITY_SCREEN.settings.highlight-style.subtle",
       default: "COMMUNITY_SCREEN.settings.highlight-style.default",
       dramatic: "COMMUNITY_SCREEN.settings.highlight-style.dramatic",
-      sequencer: "COMMUNITY_SCREEN.settings.highlight-style.sequencer",
+      ornate: "COMMUNITY_SCREEN.settings.highlight-style.ornate",
     },
   });
 

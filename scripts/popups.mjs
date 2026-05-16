@@ -4,7 +4,36 @@ import { BODY_CLASS_MODAL_BG } from "./module.mjs";
 import { isTableUser } from "./identity.mjs";
 import { get as getSetting } from "./settings.mjs";
 import { setHandler } from "./sockets.mjs";
+import { sleep } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
+
+/**
+ * Resolve a uuid to a document, retrying once after a brief wait if the
+ * first attempt returns null. The Table client occasionally races ahead
+ * of the ownership-grant update that the GM client just performed; the
+ * retry covers that propagation window.
+ *
+ * @param {string} uuid
+ * @param {number} [retryMs] - Wait before the second attempt.
+ * @returns {Promise<Document | null>}
+ */
+async function fromUuidWithRetry(uuid, retryMs = 400) {
+  try {
+    let doc = await fromUuid(uuid);
+    if (doc) return doc;
+    await sleep(retryMs);
+    doc = await fromUuid(uuid);
+    if (doc) {
+      logger.info(`fromUuid retry succeeded for ${uuid}.`);
+    } else {
+      logger.warn(`fromUuid retry still null for ${uuid} — check Table user permissions.`);
+    }
+    return doc ?? null;
+  } catch (err) {
+    logger.warn(`fromUuid threw for ${uuid}:`, err);
+    return null;
+  }
+}
 
 /**
  * The communityScreen window-namespace state object — tracks open sheets and images
@@ -89,11 +118,20 @@ function trackSheet(sheet) {
  */
 async function _showJournal({ uuid, pageId } = {}) {
   if (!isTableUser()) return;
+  logger.info(`showJournal: rendering ${uuid}`);
   try {
-    const doc = await fromUuid(uuid);
-    if (!doc) return;
+    const doc = await fromUuidWithRetry(uuid);
+    if (!doc) {
+      logger.warn(`showJournal: could not resolve ${uuid} on Table client.`);
+      return;
+    }
     const sheet = doc.sheet;
-    if (!sheet) return;
+    if (!sheet) {
+      logger.warn(
+        `showJournal: ${doc.documentName} "${doc.name}" has no sheet on Table client (permission?).`,
+      );
+      return;
+    }
     await sheet.render(true);
     centerSheet(sheet);
     trackSheet(sheet);
@@ -104,6 +142,7 @@ async function _showJournal({ uuid, pageId } = {}) {
         // page not found; ignore
       }
     }
+    logger.info(`showJournal: rendered "${doc.name}".`);
   } catch (err) {
     logger.warn("showJournal failed:", err);
   }
@@ -117,13 +156,18 @@ async function _showJournal({ uuid, pageId } = {}) {
  */
 async function _showItem({ uuid } = {}) {
   if (!isTableUser()) return;
+  logger.info(`showItem: rendering ${uuid}`);
   try {
-    const item = await fromUuid(uuid);
+    const item = await fromUuidWithRetry(uuid);
     const sheet = item?.sheet;
-    if (!sheet) return;
+    if (!sheet) {
+      logger.warn(`showItem: ${uuid} not resolvable on Table client (permission?).`);
+      return;
+    }
     await sheet.render(true);
     centerSheet(sheet);
     trackSheet(sheet);
+    logger.info(`showItem: rendered "${item.name}".`);
   } catch (err) {
     logger.warn("showItem failed:", err);
   }
@@ -174,10 +218,14 @@ async function _showImage({ src, caption } = {}) {
  */
 async function _showPortrait({ actorUuid } = {}) {
   if (!isTableUser()) return;
+  logger.info(`showPortrait: ${actorUuid}`);
   try {
-    const actor = await fromUuid(actorUuid);
+    const actor = await fromUuidWithRetry(actorUuid);
     const img = actor?.img;
-    if (!img) return;
+    if (!img) {
+      logger.warn(`showPortrait: ${actorUuid} has no img or actor not resolvable.`);
+      return;
+    }
     await _showImage({ src: img, caption: actor.name });
   } catch (err) {
     logger.warn("showPortrait failed:", err);

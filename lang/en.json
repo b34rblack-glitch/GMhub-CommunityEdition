@@ -27,11 +27,11 @@
       },
       "highlight-style": {
         "name": "Active-Turn Highlight Style",
-        "hint": "Visual style for the active-turn highlight.",
+        "hint": "Visual style for the active-turn highlight. All styles are rendered natively — no external modules required.",
         "subtle": "Subtle",
         "default": "Default",
         "dramatic": "Dramatic",
-        "sequencer": "Sequencer (auto if installed)"
+        "ornate": "Ornate (glow + halo)"
       },
       "highlight-use-disposition": {
         "name": "Color Highlight by Disposition",
