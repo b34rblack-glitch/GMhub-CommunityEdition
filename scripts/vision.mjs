@@ -1,5 +1,27 @@
-// Community Screen — combat-aware vision focus: mirrors the combat tracker's
-// active combatant to the Table, with union-vision fallback out of combat.
+// ============================================================================
+// scripts/vision.mjs
+// ----------------------------------------------------------------------------
+// Combat-aware vision focus.
+//
+// Design rule: the Table's vision follows the COMBAT TRACKER's active
+// combatant, NOT the GM's selection. GMs constantly select NPCs, traps,
+// lights, walls and templates that the room shouldn't see through, so
+// `controlToken` is deliberately not a trigger here.
+//
+// Flow:
+//   GM combat hook (combatStart/Turn/Round/updateCombat)
+//     → broadcastFocus(combat)
+//       → ensureTableObserver(combatant.actor)  (so Token.control succeeds)
+//       → 200ms settle so the ownership update reaches the Table
+//       → executeAsUser("setVisionFocus", tableUserId, {tokenId})
+//   Table receives setVisionFocus
+//     → Token.control({releaseOthers:true}) on the named token
+//     → canvas.perception.update(...) to refresh vision/lighting/sounds
+//
+// Out-of-combat: combatEnd / deleteCombat broadcast tokenId=null, which
+// causes the Table to release all controlled tokens and fall back to
+// Foundry's native union-vision over OBSERVER actors.
+// ============================================================================
 
 import { isGM, isTableUser, getTableUserId, isTableOnline } from "./identity.mjs";
 import { executeAsUser, setHandler } from "./sockets.mjs";
@@ -24,8 +46,10 @@ const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
  * @returns {string | null}
  */
 function activeCombatantTokenId(combat) {
+  // Prefer the hook-supplied combat over the global; the global may lag.
   const c = combat ?? game.combats?.active;
   if (!c?.started) return null;
+  // v14 Combatant shape may expose tokenId directly or via the token doc.
   return c.combatant?.tokenId ?? c.combatant?.token?.id ?? null;
 }
 
@@ -41,10 +65,14 @@ function _setVisionFocus({ tokenId } = {}) {
   logger.info(`setVisionFocus(${tokenId ?? "null"})`);
   try {
     if (!tokenId) {
+      // Release-all → Foundry falls back to union of OBSERVER actors.
       (canvas?.tokens?.controlled ?? []).forEach((t) => t.release());
     } else {
+      // Look up the token on this client's canvas.
       const tok = canvas?.tokens?.get(tokenId);
       if (!tok) {
+        // The token might not have been placed on the Table's canvas yet
+        // (mid-scene-switch race). Surface it so it's visible in dev tools.
         logger.warn(`setVisionFocus: token ${tokenId} not on this canvas.`);
         return;
       }
@@ -60,6 +88,7 @@ function _setVisionFocus({ tokenId } = {}) {
         );
       }
     }
+    // Tell PIXI to recompute vision, lighting, and sound exposure.
     canvas?.perception?.update?.({
       refreshVision: true,
       refreshLighting: true,
@@ -81,10 +110,12 @@ function _setVisionFocus({ tokenId } = {}) {
  */
 async function broadcastFocus(combat) {
   if (!isGM()) return;
+  // No-op if there's no Table client online to receive it.
   if (!isTableOnline()) return;
   const tableId = getTableUserId();
   if (!tableId) return;
 
+  // Prefer the hook-supplied combat over the global to avoid stale reads.
   const c = combat ?? game.combats?.active;
   const tokenId = activeCombatantTokenId(c);
 
@@ -96,13 +127,14 @@ async function broadcastFocus(combat) {
   let grantedNow = false;
   if (tokenId) {
     const combatant = c?.combatant;
+    // Try the combatant's actor directly, then via the token document.
     const actor = combatant?.actor ?? combatant?.token?.actor;
     if (actor) {
-      const tableId2 = tableId;
-      const before = actor.ownership?.[tableId2];
+      const before = actor.ownership?.[tableId];
       try {
         await ensureTableObserver(actor);
-        const after = actor.ownership?.[tableId2];
+        const after = actor.ownership?.[tableId];
+        // Track whether we actually wrote anything so we only sleep when needed.
         grantedNow = after !== before;
       } catch (err) {
         logger.debug("ensureTableObserver on combatant actor failed:", err);
@@ -132,9 +164,10 @@ async function releaseTable() {
   const tableId = getTableUserId();
   if (!tableId) return;
   try {
+    // tokenId=null is the signal to release-all on the Table side.
     await executeAsUser("setVisionFocus", tableId, { tokenId: null });
   } catch {
-    // Already logged downstream.
+    // executeAsUser already logs the failure; nothing more to do.
   }
 }
 
@@ -145,7 +178,7 @@ async function releaseTable() {
  * @returns {void}
  */
 export function init() {
-  // Table-side handler registration (idempotent).
+  // Table-side handler registration (idempotent; safe on every client).
   setHandler("setVisionFocus", _setVisionFocus);
 
   // GM-side hooks only. controlToken is intentionally NOT a trigger —
@@ -154,10 +187,12 @@ export function init() {
   Hooks.once("ready", () => {
     if (!isGM()) return;
 
+    // Every combat lifecycle event that changes the active combatant.
     Hooks.on("combatStart", (combat) => broadcastFocus(combat));
     Hooks.on("combatTurn", (combat) => broadcastFocus(combat));
     Hooks.on("combatRound", (combat) => broadcastFocus(combat));
     Hooks.on("updateCombat", (combat) => broadcastFocus(combat));
+    // End-of-combat → release Table back to union vision.
     Hooks.on("combatEnd", () => releaseTable());
     Hooks.on("deleteCombat", () => releaseTable());
 

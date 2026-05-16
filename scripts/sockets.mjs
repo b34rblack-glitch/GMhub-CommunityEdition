@@ -1,4 +1,26 @@
-// Community Screen — socketlib registration and inter-client RPC dispatch.
+// ============================================================================
+// scripts/sockets.mjs
+// ----------------------------------------------------------------------------
+// socketlib registration and inter-client RPC dispatch.
+//
+// Why socketlib (not plain game.socket.emit):
+//   - Promises + return values across clients.
+//   - executeAsUser targets a single user (vs broadcasting to everyone).
+//   - Handles request/response framing so we don't roll our own.
+//
+// Handler names are the source of truth for the inter-client protocol. We
+// register ALL names up front; feature modules call setHandler(name, fn)
+// during their own init() to replace the stubs.
+//
+// Names registered:
+//   showJournal/Item/Image/Portrait — open content on the Table
+//   closeAllPopups                  — close everything on the Table
+//   setVisionFocus                  — switch the Table's controlled token
+//   setUiHidden/setTableMode/
+//     toggleTableMode               — UI + canvas lock toggle
+//   followScene/followLevel         — scene + level mirroring
+//   refitScene                      — re-run scene fit on the Table
+// ============================================================================
 
 import { MODULE_ID } from "./module.mjs";
 import { logger } from "./lib/logger.mjs";
@@ -10,6 +32,8 @@ import { set as setSetting, get as getSetting } from "./settings.mjs";
 
 /**
  * The socketlib module handle for this module. Populated by `register()`.
+ * Tests/diagnostics can read it via `getSocket()`.
+ *
  * @type {object | null}
  */
 let cs = null;
@@ -22,7 +46,9 @@ export function getSocket() {
 }
 
 /**
- * Stub handler factory. Logs the call so we can see RPC plumbing.
+ * Stub handler factory. If a name is registered but no feature module
+ * has wired a real implementation, calling it just logs the invocation
+ * so we can see it on the receiver console while iterating.
  *
  * @param {string} name - Handler name.
  * @returns {Function}
@@ -35,7 +61,8 @@ function stub(name) {
 
 /**
  * Internal registry of handler names → implementations. Feature modules can
- * call `setHandler(name, fn)` to override a stub.
+ * call `setHandler(name, fn)` to override a stub. Map (not plain object) so
+ * the iteration order is stable.
  *
  * @type {Map<string, Function>}
  */
@@ -43,7 +70,8 @@ const handlers = new Map();
 
 /**
  * Replace a stub with a real implementation. Safe to call before or after
- * `register()`.
+ * `register()` — if called after, the new handler is also pushed to
+ * socketlib so the change takes immediate effect.
  *
  * @param {string} name - Handler name.
  * @param {Function} fn - Async or sync handler.
@@ -51,6 +79,7 @@ const handlers = new Map();
  */
 export function setHandler(name, fn) {
   handlers.set(name, fn);
+  // If socketlib is already up, re-register so the new handler wins.
   if (cs) {
     try {
       cs.register(name, fn);
@@ -65,11 +94,15 @@ export function setHandler(name, fn) {
  * canvas lock. "play" hides UI and engages the lock; "setup" reveals UI
  * and disengages.
  *
+ * Persisted to the `table-mode` client setting so a Table reload comes
+ * back in the same state.
+ *
  * @param {{mode: "play" | "setup"}} payload
  * @returns {Promise<void>}
  */
 async function _setTableMode({ mode } = {}) {
   if (!isTableUser()) return;
+  // Default to "play" if the payload is malformed.
   const next = mode === "setup" ? "setup" : "play";
   try {
     await setSetting("table-mode", next);
@@ -77,9 +110,11 @@ async function _setTableMode({ mode } = {}) {
     logger.warn("Failed to persist table-mode:", err);
   }
   if (next === "play") {
+    // Hide chrome and lock the canvas — "play" is the table-show state.
     setUiHidden(true);
     engageLock();
   } else {
+    // Reveal chrome and unlock — "setup" is the GM-at-the-table state.
     setUiHidden(false);
     disengageLock();
   }
@@ -93,13 +128,14 @@ async function _setTableMode({ mode } = {}) {
  */
 async function _toggleTableMode() {
   if (!isTableUser()) return;
+  // Read current state, flip it, then go through the regular setter.
   const current = getSetting("table-mode", "play");
   const next = current === "play" ? "setup" : "play";
   return _setTableMode({ mode: next });
 }
 
 /**
- * Set UI hidden state (without touching the canvas lock).
+ * Set UI hidden state directly (without touching the canvas lock).
  *
  * @param {{hidden: boolean}} payload
  * @returns {void}
@@ -132,18 +168,23 @@ async function _refitScene() {
  * @returns {void}
  */
 export function register() {
+  // socketlib is a hard dep — bail loudly if missing.
   if (!globalThis.socketlib) {
     logger.error("socketlib is not available — module requires the socketlib dependency.");
     return;
   }
+  // Acquire the module-scoped socket handle from socketlib.
   cs = socketlib.registerModule(MODULE_ID);
 
-  // Real handlers wired in this phase.
+  // Real handlers wired in this file. (Feature-module handlers — popups,
+  // vision, scene-follow — are pushed via setHandler() during their inits.)
   handlers.set("setTableMode", _setTableMode);
   handlers.set("toggleTableMode", _toggleTableMode);
   handlers.set("setUiHidden", _setUiHidden);
   handlers.set("refitScene", _refitScene);
 
+  // The full set of names the module supports. Anything not yet wired
+  // gets a stub so calls don't throw.
   const names = [
     "showJournal",
     "showItem",
@@ -159,6 +200,7 @@ export function register() {
     "refitScene",
   ];
 
+  // Push each name to socketlib, preferring a real handler if one was set.
   for (const name of names) {
     const fn = handlers.get(name) ?? stub(name);
     cs.register(name, fn);
@@ -177,6 +219,7 @@ export function register() {
  * @returns {Promise<*>}
  */
 export async function executeAsUser(handler, userId, ...args) {
+  // Guard for callers that fire before socketlib.ready completes.
   if (!cs) {
     logger.warn(`Socket not ready when calling "${handler}".`);
     return undefined;
@@ -184,11 +227,12 @@ export async function executeAsUser(handler, userId, ...args) {
   try {
     return await cs.executeAsUser(handler, userId, ...args);
   } catch (err) {
+    // Most common cause: target user disconnected between check and call.
     logger.error(`Socket "${handler}" failed:`, err);
     try {
       ui.notifications?.warn(game.i18n.localize("COMMUNITY_SCREEN.errors.table-offline"));
     } catch {
-      // ui not ready yet
+      // ui not ready yet (init-time race); swallow.
     }
     throw err;
   }

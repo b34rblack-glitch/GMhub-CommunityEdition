@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Comprehensive in-file comments** added to every `scripts/*.mjs`
+  file. Each file gets a multi-line header that explains its purpose,
+  the lifecycle hook it ties into, what it imports, and any non-obvious
+  design decisions. Every significant line of code carries an inline
+  comment describing what it does and why. JSDoc on exports made
+  consistent. Pure documentation pass — no behavior change.
+
 ### Fixed
 
 - **Item and actor pushes now actually display.** v0.1.5 routed

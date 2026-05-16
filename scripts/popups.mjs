@@ -1,31 +1,37 @@
-// Community Screen — push display on the Table client.
+// ============================================================================
+// scripts/popups.mjs
+// ----------------------------------------------------------------------------
+// Push-display receiver on the Table client.
 //
 // Design (Foundry v14):
-// Previous iterations tried to ship rendered HTML over socketlib and
-// render a custom ApplicationV2 on the Table. That worked in principle
-// but proved fragile across systems and v14 sheet variants.
+// Previous iterations tried to ship rendered HTML over socketlib and render
+// a custom ApplicationV2 on the Table. That worked in principle but proved
+// fragile across systems and v14 sheet variants.
 //
-// This version uses Foundry's NATIVE share mechanisms — the same paths
-// the "Show to Players" right-click action uses — and only owns the
-// CLOSE side. Pattern adapted from `gsimon2/close-player-art`, which
-// has been the de-facto reference for "close shared art across all
-// clients" and is v12-verified; the same instance/DOM-walk close
-// strategy works just as well in v14 against `foundry.applications.
-// instances` and the legacy `ui.windows` collection.
+// This version uses Foundry's NATIVE share mechanisms — the same paths the
+// "Show to Players" right-click action uses — and only OWNS the close side.
+// Pattern adapted from `gsimon2/close-player-art`, which has been the
+// de-facto reference for "close shared art across all clients" and is
+// v12-verified; the same instance-walk close strategy works just as well in
+// v14 against `foundry.applications.instances` and the legacy `ui.windows`
+// collection.
 //
 // What's native:
-//   - Journals  → `JournalEntry.prototype.show(true, [tableUser])`
-//   - Items     → `ImagePopout.shareImage({image, title, caption}, [id])`
-//                 (Foundry's own ImagePopout, with the description in
-//                  the caption; items have no `.show()` in core.)
-//   - Portraits → `ImagePopout.shareImage({image: actor.img, title}, [id])`
-//   - Raw image → `ImagePopout.shareImage({image: src, title}, [id])`
+//   - Journals  → `JournalEntry.prototype.show(true, [tableUser])` (GM-side
+//                 in push-buttons.mjs)
+//   - Items     → `executeAsUser("showImage", tableId, {src, title, caption})`
+//                 (GM-side ships the item's image + plain-text description
+//                 caption; we open ImagePopout locally)
+//   - Portraits → same `showImage` socket path
+//   - Raw image → same `showImage` socket path
 //
 // What's our own:
 //   - Close all: socketlib RPC to the Table, which walks
-//     `foundry.applications.instances` and closes every active
-//     ImagePopout / JournalSheet / JournalEntrySheet. Plus an AppV1
-//     `ui.windows` fallback for legacy sheets.
+//     `foundry.applications.instances` and closes every active popout
+//     whose constructor name matches a known pattern, with a permissive
+//     fallback that closes any window-app if the strict match returns
+//     zero (so the GM always has an escape hatch).
+// ============================================================================
 
 import { MODULE_ID, BODY_CLASS_MODAL_BG } from "./module.mjs";
 import { isTableUser } from "./identity.mjs";
@@ -77,8 +83,11 @@ const POPOUT_EXCLUDE_PATTERNS = [
  * @returns {void}
  */
 function updateBackdrop() {
+  // Only the Table client renders the dim overlay.
   if (!isTableUser()) return;
+  // Honor the world setting.
   const enabled = getSetting("popup-backdrop", true);
+  // Toggle (don't add/remove conditionally — toggle is one DOM op).
   document.body.classList.toggle(BODY_CLASS_MODAL_BG, Boolean(enabled && countOpenPopouts() > 0));
 }
 
@@ -87,14 +96,14 @@ function updateBackdrop() {
  */
 function countOpenPopouts() {
   let n = 0;
-  // v14 AppV2 instances live here.
+  // v14 AppV2 instances live in this Map (keyed by app id).
   const instances = foundry.applications?.instances;
   if (instances && typeof instances.values === "function") {
     for (const app of instances.values()) {
       if (isPopoutLike(app)) n++;
     }
   }
-  // Legacy AppV1 instances live in ui.windows.
+  // Legacy AppV1 instances live in ui.windows (keyed by app id).
   for (const app of Object.values(ui?.windows ?? {})) {
     if (isPopoutLike(app)) n++;
   }
@@ -103,11 +112,13 @@ function countOpenPopouts() {
 
 /**
  * @param {object} app
- * @returns {boolean}
+ * @returns {boolean} True if the app looks like something we'd close on Close-All.
  */
 function isPopoutLike(app) {
+  // Defensive: minified/unusual apps may lack a constructor name.
   const name = app?.constructor?.name ?? "";
   if (!name) return false;
+  // Exclude list wins over include list.
   if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) return false;
   return POPOUT_CLASS_PATTERNS.some((p) => name.includes(p));
 }
@@ -137,6 +148,7 @@ function isAnyWindowApp(app) {
  */
 function scheduleBackdropUpdate() {
   if (!isTableUser()) return;
+  // RAF coalesces multiple hook fires in the same frame into one update.
   requestAnimationFrame(updateBackdrop);
 }
 
@@ -155,6 +167,7 @@ async function _closeAllPopups() {
   if (!isTableUser()) return;
   logger.info("closeAllPopups — walking foundry.applications.instances + ui.windows");
 
+  // Collect everything currently open across both registries.
   const allApps = [];
   const instances = foundry.applications?.instances;
   if (instances && typeof instances.values === "function") {
@@ -184,6 +197,7 @@ async function _closeAllPopups() {
     }
   }
 
+  // Close them, counting successes so the summary log is accurate.
   let closed = 0;
   for (const app of toClose) {
     try {
@@ -194,6 +208,7 @@ async function _closeAllPopups() {
     }
   }
 
+  // Recompute the backdrop now that windows are gone.
   scheduleBackdropUpdate();
   logger.info(`closeAllPopups: closed ${closed} of ${toClose.length} popout(s).`);
 }
@@ -207,14 +222,18 @@ async function _closeAllPopups() {
  */
 async function _showImage({ src, caption, title } = {}) {
   if (!isTableUser()) return;
+  // Defensive: src is the only thing we actually need.
   if (!src) return;
   logger.info(`showImage: ${src}`);
   try {
+    // v14 namespace; fall back to legacy global for resilience.
     const ImagePopoutCls = foundry?.applications?.apps?.ImagePopout ?? globalThis.ImagePopout;
     if (!ImagePopoutCls) {
       logger.error("No ImagePopout class available on Table client.");
       return;
     }
+    // shareable=false hides the "share with others" header button — this
+    // popup is already a share; we don't want re-share buttons.
     const ip = new ImagePopoutCls(src, { title: title ?? caption ?? "", shareable: false });
     await ip.render(true);
     scheduleBackdropUpdate();
@@ -233,8 +252,9 @@ async function _showImage({ src, caption, title } = {}) {
  */
 async function _showPortrait({ src, caption, actorUuid } = {}) {
   if (!isTableUser()) return;
+  // Modern callers send src directly — route to _showImage.
   if (src) return _showImage({ src, caption });
-  // Fallback for legacy callers.
+  // Fallback for legacy callers that only sent actorUuid.
   try {
     const actor = actorUuid ? await fromUuid(actorUuid) : null;
     const img = actor?.img;
@@ -252,11 +272,11 @@ async function _showPortrait({ src, caption, actorUuid } = {}) {
  * Backwards-compat journal/item handlers.
  *
  * In v0.1.5+, the GM client uses Foundry's native `JournalEntry.show()`
- * and `ImagePopout.shareImage()` to push journals and items respectively
- * — those go through Foundry's own socket plumbing, NOT through socketlib
- * to these handlers. These remain registered so a GM client running an
- * older module version against a Table client running the new code still
- * sees something happen.
+ * and our `showImage` socket path for items respectively — those go
+ * through Foundry's own socket plumbing or our `showImage`, NOT through
+ * socketlib to these handlers. These remain registered so a GM client
+ * running an older module version against a Table client running the
+ * new code still sees something happen.
  *
  * @param {{title?: string, html?: string}} payload
  * @returns {Promise<void>}
@@ -286,6 +306,7 @@ async function _showItem({ title, html } = {}) {
  */
 async function _renderInlineHtml(data) {
   try {
+    // Lazy-class so we only touch foundry.applications.* when actually used.
     const cls = makeInlineHtmlClass();
     const app = new cls(data);
     await app.render(true);
@@ -295,7 +316,16 @@ async function _renderInlineHtml(data) {
   }
 }
 
+/** Lazy-instantiated inline-HTML AppV2 class. Built only on first use. */
 let _inlineHtmlClass = null;
+
+/**
+ * Construct the inline-HTML display class on demand. Defined lazily so
+ * importing this module before Foundry's init doesn't dereference
+ * `foundry.applications.api.*` (which is undefined at that point).
+ *
+ * @returns {Function}
+ */
 function makeInlineHtmlClass() {
   if (_inlineHtmlClass) return _inlineHtmlClass;
   _inlineHtmlClass = class CommunityScreenInlineHtml extends (
@@ -311,12 +341,14 @@ function makeInlineHtmlClass() {
       main: { template: `modules/${MODULE_ID}/templates/popup-display.hbs` },
     };
     constructor(data, options = {}) {
+      // Merge the title from the payload into the standard AppV2 options.
       super(
         foundry.utils.mergeObject(
           { window: { title: data?.title || "Community Screen" } },
           options,
         ),
       );
+      // Stash the payload so _prepareContext can hand it to the template.
       this._csData = data ?? {};
     }
     async _prepareContext() {
@@ -335,7 +367,9 @@ function makeInlineHtmlClass() {
 // =====================================================================
 
 /**
- * Filter the AppV2 "pop out" header control on the Table client.
+ * Filter the AppV2 "pop out" header control on the Table client. We
+ * don't want the Table to be able to pop a sheet into its own OS-level
+ * window (players watching the TV would lose sight of it).
  *
  * @param {object} app
  * @param {Array<{action: string}>} controls
@@ -344,6 +378,7 @@ function makeInlineHtmlClass() {
 function filterPopoutHeaderControl(app, controls) {
   if (!isTableUser()) return;
   if (!Array.isArray(controls)) return;
+  // Walk backwards because we're mutating the array during iteration.
   for (let i = controls.length - 1; i >= 0; i--) {
     if (controls[i]?.action === "popout") controls.splice(i, 1);
   }
@@ -355,12 +390,14 @@ function filterPopoutHeaderControl(app, controls) {
  * @returns {void}
  */
 export function init() {
+  // Register every push handler — even the legacy ones, for backwards compat.
   setHandler("showJournal", _showJournal);
   setHandler("showItem", _showItem);
   setHandler("showImage", _showImage);
   setHandler("showPortrait", _showPortrait);
   setHandler("closeAllPopups", _closeAllPopups);
 
+  // Strip the native-popout header button on the Table.
   Hooks.on("getHeaderControlsApplicationV2", filterPopoutHeaderControl);
 
   // Update the backdrop when any AppV2 / AppV1 renders or closes — covers
@@ -372,7 +409,7 @@ export function init() {
   Hooks.on("renderApplication", scheduleBackdropUpdate); // legacy AppV1
   Hooks.on("closeApplication", scheduleBackdropUpdate);
 
-  // Console fallbacks.
+  // Console fallbacks for diagnostics — usable from the Table dev tools.
   Hooks.once("ready", () => {
     const mod = game.modules?.get?.(MODULE_ID);
     if (mod) {

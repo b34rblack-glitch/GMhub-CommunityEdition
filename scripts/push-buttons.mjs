@@ -1,13 +1,21 @@
-// Community Screen — injects "Push to Table" header buttons and directory
-// context-menu entries.
+// ============================================================================
+// scripts/push-buttons.mjs
+// ----------------------------------------------------------------------------
+// Injects "Push to Table" header buttons on document sheets and adds the
+// matching right-click context-menu entry on directory views.
 //
-// The actual push goes through Foundry's native share mechanisms (v14):
-//   - JournalEntry.prototype.show(true, [tableUser])
-//   - foundry.applications.apps.ImagePopout.shareImage(data, [userId])
+// The actual push uses Foundry-native delivery wherever possible (v14):
+//   - JournalEntry → `doc.show(true, [tableUser])`
+//                    (Foundry's "Show to Players" socket flow)
+//   - Item         → `executeAsUser("showImage", tableId, {src, title, caption})`
+//                    (Items have no native show; we ship image + caption)
+//   - Actor        → `executeAsUser("showImage", tableId, {src, title})`
+//                    (Portrait — same socketlib path)
+//   - Scene        → `executeAsUser("followScene", tableId, {sceneId})`
 //
-// These bypass the document-permission / fromUuid path that previous
-// versions struggled with. Items have no native share so they ride
-// the ImagePopout path with the item description in the caption.
+// `canPush()` gates the buttons so they only appear when there's
+// actually somewhere to push to.
+// ============================================================================
 
 import { isGM, getTableUserId, isTableOnline, getTableUser } from "./identity.mjs";
 import { executeAsUser } from "./sockets.mjs";
@@ -22,6 +30,7 @@ const OWNERSHIP_PROPAGATION_DELAY_MS = 200;
  * @returns {boolean} True if the GM may push to a connected Table user.
  */
 function canPush() {
+  // All three must hold for a push to actually land somewhere.
   return isGM() && Boolean(getTableUserId()) && isTableOnline();
 }
 
@@ -36,11 +45,15 @@ function canPush() {
 function htmlToCaption(html, max = 400) {
   if (!html) return "";
   try {
+    // Build a throwaway div so the browser does the HTML→text conversion for us.
     const div = document.createElement("div");
     div.innerHTML = String(html);
+    // textContent strips all tags; collapse whitespace runs.
     const text = (div.textContent || "").replace(/\s+/g, " ").trim();
+    // Truncate to `max` with an ellipsis so the caption stays one line.
     return text.length > max ? text.slice(0, max - 1) + "…" : text;
   } catch {
+    // If parsing fails entirely, at least return a truncated raw string.
     return String(html).slice(0, max);
   }
 }
@@ -52,6 +65,8 @@ function htmlToCaption(html, max = 400) {
  * @returns {string}
  */
 function extractItemDescription(item) {
+  // Item descriptions live in different places per system; cover the
+  // common shapes: plain string, {value}, {unidentified}, {short}.
   const d = item?.system?.description;
   if (typeof d === "string") return d;
   return d?.value ?? d?.unidentified ?? d?.short ?? "";
@@ -62,13 +77,15 @@ function extractItemDescription(item) {
 // =====================================================================
 
 /**
- * Push a document to the Table using Foundry's native share APIs.
+ * Push a document to the Table using Foundry's native share APIs where
+ * available, falling back to our own socketlib `showImage` path otherwise.
  *
  * @param {ClientDocument} doc
  * @returns {Promise<void>}
  */
 async function pushDocument(doc) {
   if (!doc) return;
+  // Resolve the configured Table user.
   const tableUser = getTableUser();
   if (!tableUser) {
     ui.notifications?.warn(t("errors.no-table-user"));
@@ -88,7 +105,9 @@ async function pushDocument(doc) {
       // Foundry requires the receiving user to have the doc in their
       // collection, so ensure at least LIMITED ownership first.
       await ensureTableObserver(doc);
+      // Wait for the ownership update to land on the Table before show().
       await sleep(OWNERSHIP_PROPAGATION_DELAY_MS);
+      // Feature-detect: doc.show is on JournalEntry in v11+.
       if (typeof doc.show === "function") {
         await doc.show(true, [tableUser]);
       } else {
@@ -118,11 +137,15 @@ async function pushDocument(doc) {
       // Scene is a different beast — followScene on the Table.
       await executeAsUser("followScene", tableId, { sceneId: doc.id });
     } else {
+      // Unsupported document type — log loudly so we know if a future
+      // sheet type is unhandled.
       logger.warn(`pushDocument: unsupported document type ${type}`);
       return;
     }
+    // Confirmation toast on the GM side.
     ui.notifications?.info(t("notifications.pushed"));
   } catch (err) {
+    // Surface failures so the GM knows the push didn't land.
     logger.warn("pushDocument failed:", err);
     ui.notifications?.warn(t("errors.push-failed", { message: err?.message ?? String(err) }));
   }
@@ -147,18 +170,25 @@ export async function pushImage(src, title = "") {
 // =====================================================================
 
 /**
+ * Inject "Push to Table" into an AppV2 sheet's header controls.
+ *
  * @param {object} app
  * @param {Array<object>} controls
  * @returns {void}
  */
 function injectAppV2HeaderControl(app, controls) {
+  // Don't show the button if it can't do anything.
   if (!canPush()) return;
   if (!Array.isArray(controls)) return;
+  // AppV2 exposes .document; legacy v1 sheets exposed .object.
   const doc = app?.document ?? app?.object;
   if (!doc) return;
+  // We support exactly these document types.
   const supported = ["JournalEntry", "Item", "Actor", "Scene"];
   if (!supported.includes(doc.documentName)) return;
+  // Dedupe — header hooks can fire multiple times for the same app.
   if (controls.some((c) => c?.action === "community-screen-push")) return;
+  // Insert at position 0 so it sits first on the left.
   controls.unshift({
     action: "community-screen-push",
     icon: "fa-solid fa-tv",
@@ -168,6 +198,8 @@ function injectAppV2HeaderControl(app, controls) {
 }
 
 /**
+ * Inject "Push to Table" into a legacy v1 sheet's header buttons.
+ *
  * @param {object} app
  * @param {Array<object>} buttons
  * @returns {void}
@@ -180,6 +212,7 @@ function injectV1HeaderButton(app, buttons) {
   const supported = ["JournalEntry", "Item", "Actor", "Scene"];
   if (!supported.includes(doc.documentName)) return;
   if (buttons.some((b) => b?.class === "community-screen-push")) return;
+  // v1 button shape uses `class` and `onclick` (lowercase).
   buttons.unshift({
     label: t("buttons.push-to-table"),
     class: "community-screen-push",
@@ -189,6 +222,10 @@ function injectV1HeaderButton(app, buttons) {
 }
 
 /**
+ * Factory for directory-context-menu injectors. Each directory has its
+ * own context-menu hook, so we build a small per-directory injector that
+ * knows which collection to look the document up in.
+ *
  * @param {string} collection
  * @returns {(html: any, entries: Array<object>) => void}
  */
@@ -196,6 +233,8 @@ function makeDirectoryInjector(collection) {
   return (_html, entries) => {
     if (!canPush()) return;
     if (!Array.isArray(entries)) return;
+    // _csm is our own marker for dedupe; works around the fact that
+    // some directories call the context hook multiple times.
     if (entries.some((e) => e?._csm === `community-screen-push-${collection}`)) return;
     entries.push({
       name: t("context.push-to-table"),
@@ -203,9 +242,12 @@ function makeDirectoryInjector(collection) {
       condition: () => canPush(),
       _csm: `community-screen-push-${collection}`,
       callback: async (target) => {
+        // `target` is either an HTMLLIElement (v14) or a jQuery wrapper (legacy).
         const el = target instanceof HTMLElement ? target : target?.[0];
+        // Different directories use different data attribute names.
         const id = el?.dataset?.entryId ?? el?.dataset?.documentId;
         if (!id) return;
+        // Look up the document by id in the appropriate collection.
         const docName = collectionToDocName(collection);
         const coll = game.collections?.get?.(docName);
         const doc = coll?.get?.(id);
@@ -216,6 +258,8 @@ function makeDirectoryInjector(collection) {
 }
 
 /**
+ * Translate a directory collection nickname to a Document class name.
+ *
  * @param {string} nick
  * @returns {string}
  */
@@ -235,9 +279,13 @@ function collectionToDocName(nick) {
 }
 
 /**
+ * Register every push-button hook.
+ *
  * @returns {void}
  */
 export function init() {
+  // AppV2 header buttons — generic + class-specific names. Foundry's
+  // hook namer dispatches both, depending on the sheet.
   Hooks.on("getHeaderControlsApplicationV2", injectAppV2HeaderControl);
   Hooks.on("getApplicationHeaderControls", injectAppV2HeaderControl);
   const v2DocClasses = [
@@ -251,13 +299,13 @@ export function init() {
     Hooks.on(`getHeaderControls${cls}`, injectAppV2HeaderControl);
   }
 
-  // Legacy v1 sheet header buttons.
+  // Legacy v1 sheet header buttons (still used by some systems).
   Hooks.on("getJournalSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getItemSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getActorSheetHeaderButtons", injectV1HeaderButton);
   Hooks.on("getSceneConfigHeaderButtons", injectV1HeaderButton);
 
-  // Directory context menus.
+  // Directory context menus (right-click on a directory entry in sidebar).
   Hooks.on("getJournalDirectoryEntryContext", makeDirectoryInjector("journal"));
   Hooks.on("getActorDirectoryEntryContext", makeDirectoryInjector("actors"));
   Hooks.on("getItemDirectoryEntryContext", makeDirectoryInjector("items"));
