@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Item and actor pushes now actually display.** v0.1.5 routed
+  items/portraits through `ImagePopout.shareImage`, but that API's
+  signature has shifted across Foundry v11/v12/v13/v14 and the
+  user-targeting semantics aren't reliable. They now ride our own
+  `showImage` socketlib handler, which opens a fresh `ImagePopout`
+  locally on the Table client with the URL/title/caption we send.
+  Same path that was already working for raw images.
+- **Close All now closes journal popouts.** Broadened the
+  popout-class substring list to include `JournalTextPageSheet`,
+  `JournalImagePageSheet`, `JournalVideoPageSheet`,
+  `JournalPDFPageSheet`, `ItemSheet`, `ActorSheet`. Added an exclude
+  list (`Settings` / `Sidebar` / `Configure` / `Notifications` /
+  `ControlPalette`) so the close walk can't kill the Table's own
+  module-config dialog if one happens to be open. Added a permissive
+  fallback: if the strict pattern match finds zero hits, close any
+  `window-app` instead so a GM-stranded popup always has an exit.
+  Logs the full list of constructor names seen so future close
+  failures are diagnosable from the Table console.
+
 ### Changed
 
 - **Push to Table now uses Foundry's native share mechanisms** instead

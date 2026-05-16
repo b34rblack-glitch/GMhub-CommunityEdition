@@ -45,6 +45,28 @@ const POPOUT_CLASS_PATTERNS = [
   "JournalSheet",
   "JournalEntrySheet",
   "JournalEntryPageSheet",
+  "JournalTextPageSheet",
+  "JournalImagePageSheet",
+  "JournalVideoPageSheet",
+  "JournalPDFPageSheet",
+  "ItemSheet",
+  "ActorSheet",
+];
+
+/**
+ * Class names we will NEVER close even if they match the patterns above
+ * (defense-in-depth — the Table client shouldn't have anything besides
+ * the canvas open, but if a settings dialog or chat window happens to
+ * be open we don't want to nuke it).
+ *
+ * @type {string[]}
+ */
+const POPOUT_EXCLUDE_PATTERNS = [
+  "Settings",
+  "Sidebar",
+  "Configure",
+  "Notifications",
+  "ControlPalette",
 ];
 
 /**
@@ -85,7 +107,27 @@ function countOpenPopouts() {
  */
 function isPopoutLike(app) {
   const name = app?.constructor?.name ?? "";
+  if (!name) return false;
+  if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) return false;
   return POPOUT_CLASS_PATTERNS.some((p) => name.includes(p));
+}
+
+/**
+ * Permissive fallback — treat anything that looks like a floating window
+ * (has a position and a constructor whose name doesn't match the exclude
+ * list) as closable. Only used after the strict match returns zero hits.
+ *
+ * @param {object} app
+ * @returns {boolean}
+ */
+function isAnyWindowApp(app) {
+  const name = app?.constructor?.name ?? "";
+  if (!name) return false;
+  if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) return false;
+  // AppV2 always has a .window object; AppV1 has .options.popOut.
+  const isAppV2 = !!app?.window;
+  const isAppV1Popout = app?.options?.popOut === true;
+  return isAppV2 || isAppV1Popout;
 }
 
 /**
@@ -113,31 +155,47 @@ async function _closeAllPopups() {
   if (!isTableUser()) return;
   logger.info("closeAllPopups — walking foundry.applications.instances + ui.windows");
 
-  const toClose = [];
-
-  // v14 AppV2.
+  const allApps = [];
   const instances = foundry.applications?.instances;
   if (instances && typeof instances.values === "function") {
-    for (const app of instances.values()) {
-      if (isPopoutLike(app)) toClose.push(app);
+    for (const app of instances.values()) allApps.push(app);
+  }
+  for (const app of Object.values(ui?.windows ?? {})) allApps.push(app);
+
+  // Dump every candidate's constructor name so close failures are
+  // diagnosable from the Table console.
+  logger.info(
+    "closeAllPopups candidates:",
+    allApps.map((a) => a?.constructor?.name).filter(Boolean),
+  );
+
+  // Strict pass: anything matching the known popout patterns.
+  let toClose = allApps.filter(isPopoutLike);
+
+  // Permissive fallback: if the strict pass found nothing, close any
+  // floating window. Better to close a stray sheet than to leave the
+  // Table screen with an open popup the GM can't get rid of.
+  if (toClose.length === 0) {
+    toClose = allApps.filter(isAnyWindowApp);
+    if (toClose.length > 0) {
+      logger.info(
+        `closeAllPopups: strict match found 0; using permissive fallback (${toClose.length}).`,
+      );
     }
   }
 
-  // Legacy v1 (some systems still render their journal sheets as v1).
-  for (const app of Object.values(ui?.windows ?? {})) {
-    if (isPopoutLike(app)) toClose.push(app);
-  }
-
+  let closed = 0;
   for (const app of toClose) {
     try {
       await app.close({ animate: false });
+      closed++;
     } catch (err) {
-      logger.debug("close failed:", err);
+      logger.warn(`close failed for ${app?.constructor?.name}:`, err);
     }
   }
 
   scheduleBackdropUpdate();
-  logger.info(`closeAllPopups: closed ${toClose.length} popout(s).`);
+  logger.info(`closeAllPopups: closed ${closed} of ${toClose.length} popout(s).`);
 }
 
 /**

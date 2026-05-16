@@ -26,13 +26,6 @@ function canPush() {
 }
 
 /**
- * @returns {object|null} The Foundry ImagePopout class in v14.
- */
-function getImagePopoutClass() {
-  return foundry?.applications?.apps?.ImagePopout ?? globalThis.ImagePopout ?? null;
-}
-
-/**
  * Convert a possibly-HTML description string to a short plain-text
  * caption. The DOM API is used since the GM client always has one.
  *
@@ -103,39 +96,24 @@ async function pushDocument(doc) {
         return;
       }
     } else if (type === "Item") {
-      // Items have no native .show() in core. Use ImagePopout.shareImage
-      // with the item's image and a plain-text description in the caption.
-      // No permission needed — shareImage just ships URLs/text.
-      const ImagePopoutCls = getImagePopoutClass();
-      if (!ImagePopoutCls?.shareImage) {
-        logger.warn("ImagePopout.shareImage unavailable — Foundry v14 expected.");
-        return;
-      }
+      // Route through our own socketlib handler instead of
+      // foundry.applications.apps.ImagePopout.shareImage. shareImage's
+      // signature has shifted across v11/v12/v13/v14 and broadcast
+      // semantics aren't guaranteed to target a single user, so our
+      // own showImage path is more predictable: the Table client opens
+      // a local ImagePopout with the URL we send.
       const caption = htmlToCaption(extractItemDescription(doc));
-      ImagePopoutCls.shareImage(
-        {
-          image: doc.img,
-          title: doc.name ?? "",
-          caption,
-          uuid: doc.uuid,
-        },
-        [tableId],
-      );
+      await executeAsUser("showImage", tableId, {
+        src: doc.img,
+        title: doc.name ?? "",
+        caption,
+      });
     } else if (type === "Actor") {
-      // Portrait via native shareImage.
-      const ImagePopoutCls = getImagePopoutClass();
-      if (!ImagePopoutCls?.shareImage) {
-        logger.warn("ImagePopout.shareImage unavailable — Foundry v14 expected.");
-        return;
-      }
-      ImagePopoutCls.shareImage(
-        {
-          image: doc.img,
-          title: doc.name ?? "",
-          uuid: doc.uuid,
-        },
-        [tableId],
-      );
+      // Portrait — same socketlib path.
+      await executeAsUser("showImage", tableId, {
+        src: doc.img,
+        title: doc.name ?? "",
+      });
     } else if (type === "Scene") {
       // Scene is a different beast — followScene on the Table.
       await executeAsUser("followScene", tableId, { sceneId: doc.id });
@@ -161,9 +139,7 @@ export async function pushImage(src, title = "") {
   if (!canPush()) return;
   const tableUser = getTableUser();
   if (!tableUser) return;
-  const ImagePopoutCls = getImagePopoutClass();
-  if (!ImagePopoutCls?.shareImage) return;
-  ImagePopoutCls.shareImage({ image: src, title }, [tableUser.id]);
+  await executeAsUser("showImage", tableUser.id, { src, title });
 }
 
 // =====================================================================
