@@ -103,8 +103,8 @@ and restart Foundry.
 2. **Note the world URL** Foundry shows in the join screen.
 3. **Open module settings** (GM laptop): **Game Settings → Configure Settings →
    Module Settings → Community Screen**. Set **Table User** to the new
-   account. (For v0.1 this is the user's id — visible in browser dev-tools as
-   `game.users.getName("Table").id`.)
+   account. **You can enter either the user's name (e.g. `Table`) or the
+   user ID** — both work.
 4. **Launch a second browser session** (separate browser, separate profile,
    or another device) on the world URL and log in as the Table user.
 5. **Full-screen the Table browser** (`F11`), drag it to the TV, and walk
@@ -129,7 +129,7 @@ and restart Foundry.
 
 | Setting                        | Scope  | Default | What it does                                                                |
 | ------------------------------ | ------ | ------- | --------------------------------------------------------------------------- |
-| Table User                     | world  | ""      | The user id that drives the Table TV.                                       |
+| Table User                     | world  | ""      | The user account that drives the Table TV. Accepts a user name or id.       |
 | Default Scene Fit Mode         | world  | contain | Fit mode applied when a scene has no per-scene override.                    |
 | Custom Scale Override          | world  | 1.0     | Force a specific zoom (currently informational; auto-fit takes precedence). |
 | Show Active-Turn Highlight     | client | false   | Draw the highlight ring on this client (default on for the Table).          |

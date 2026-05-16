@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Table User setting now accepts a user name OR a user id.** Previously
+  it only worked with the (non-obvious) user id, so entering `Table` —
+  the natural thing to type — left the module thinking the Table client
+  was offline even when it was connected. `getTableUser()` now falls back
+  to `game.users.getName(value)` if the id lookup misses. Setting hint
+  and README updated.
+- **GM keybindings now show a more specific warning** when dispatch
+  can't reach the Table: distinguishes "no Table user configured",
+  "configured value doesn't match any user" (new `unknown-table-user`
+  i18n key), and "Table user offline".
 - **Release workflow now publishes on push to `main`** as well as on
   `v*.*.*` tag pushes. Foundry's manifest-URL install
   (`releases/latest/download/module.json`) now resolves without a

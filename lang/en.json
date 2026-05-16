@@ -6,7 +6,7 @@
     "settings": {
       "table-user-id": {
         "name": "Table User",
-        "hint": "The user account that drives the shared TV. Must be Player role. Enter the user ID (a 16-character string)."
+        "hint": "The user account that drives the shared TV. Must be Player role. Enter either the user's name (e.g. 'Table') OR the user ID."
       },
       "fit-mode": {
         "name": "Default Scene Fit Mode",
@@ -93,6 +93,7 @@
     "errors": {
       "table-offline": "Table client is not connected.",
       "no-table-user": "No Table user is configured.",
+      "unknown-table-user": "Table user '{value}' was not found. Check the Table User setting — accepts a user name or id.",
       "no-observer-actors": "The configured Table user has no actors with OBSERVER or OWNER permission. Vision will not work until permissions are granted.",
       "push-failed": "Could not push to Table: {message}"
     },
