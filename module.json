@@ -14,14 +14,8 @@
       "url": "https://github.com/b34rblack-glitch"
     }
   ],
-  "esmodules": [
-    "scripts/main.mjs"
-  ],
-  "styles": [
-    "styles/community-screen.css",
-    "styles/popups.css",
-    "styles/push-buttons.css"
-  ],
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/community-screen.css", "styles/popups.css", "styles/push-buttons.css"],
   "languages": [
     {
       "lang": "en",

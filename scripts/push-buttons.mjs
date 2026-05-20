@@ -128,9 +128,24 @@ async function pushDocument(doc) {
         caption,
       });
     } else if (type === "Actor") {
-      // Portrait — same socketlib path.
+      // Portrait. Fall back through plausible image sources, because
+      // depending on the system / actor type / linking mode, any one of
+      // these can be the meaningful artwork:
+      //   - actor.img is the canonical portrait
+      //   - prototypeToken.texture.src is the token art (often the
+      //     same image for monsters where there's no separate portrait)
+      //   - the scene-token texture is a last resort for tokenized actors
+      const src = doc.img || doc.prototypeToken?.texture?.src || doc.token?.texture?.src || "";
+      if (!src) {
+        // No usable image — surface the failure to the GM rather than
+        // silently shipping an empty popup that won't render anything.
+        logger.warn(`pushDocument(Actor): no img on "${doc.name}".`);
+        ui.notifications?.warn(t("errors.push-failed", { message: "no image" }));
+        return;
+      }
+      logger.info(`pushDocument(Actor): src=${src}`);
       await executeAsUser("showImage", tableId, {
-        src: doc.img,
+        src,
         title: doc.name ?? "",
       });
     } else if (type === "Scene") {

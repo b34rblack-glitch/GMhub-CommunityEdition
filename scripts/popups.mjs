@@ -3,14 +3,6 @@
 // ----------------------------------------------------------------------------
 // Push-display receiver on the Table client.
 //
-// Design (Foundry v14):
-// Previous iterations tried to ship rendered HTML over socketlib and render
-// a custom ApplicationV2 on the Table. That worked in principle but proved
-// fragile across systems and v14 sheet variants.
-//
-// This version uses Foundry's NATIVE share mechanisms — the same paths the
-// "Show to Players" right-click action uses — and only OWNS the close side.
-//
 // What's native:
 //   - Journals  → `JournalEntry.prototype.show(true, [tableUser])` (GM-side
 //                 in push-buttons.mjs)
@@ -20,26 +12,25 @@
 //   - Portraits → same `showImage` socket path
 //   - Raw image → same `showImage` socket path
 //
-// What's our own — Close All (DOM-click strategy):
-//   socketlib RPC to the Table runs a DOM walk over every visible
-//   window-app and synthesizes a click on each one's close button. This
-//   is the same brute-force approach `gsimon2/close-player-art` uses,
-//   and it's MORE reliable than calling `app.close()` on the application
-//   instance because:
+// What's our own — Close All:
+//   socketlib RPC to the Table iterates `foundry.applications.instances`
+//   (v14 AppV2 registry) and `ui.windows` (legacy v1 registry), and for
+//   each non-excluded popout tries three close strategies in order:
 //
-//     (a) it bypasses any quirk where `_showEntry`-rendered sheets
-//         aren't reachable through `foundry.applications.instances`,
-//     (b) it goes through Foundry's normal close handler exactly as if
-//         the user pressed the X — animations, hooks, document
-//         dereferencing all fire the way they should,
-//     (c) it's class-name agnostic — works for `JournalEntrySheet`,
-//         system subclasses like `JournalEntrySheetPF2e`, ImagePopout,
-//         ItemSheet, and anything else that has a header close button.
+//     1. Click `app.window.close` — Foundry's own HTMLButtonElement
+//        reference to the X button in the window header. This is the
+//        most reliable path on v14 because it goes through Foundry's
+//        normal click handler.
+//     2. querySelector inside `app.element` for any close-shaped
+//        button (covers legacy v1 sheets and any AppV2 variant that
+//        doesn't expose `.window.close` for some reason).
+//     3. Fall back to `app.close({ animate: false })`.
 //
-//   Previous strategies (document-collection walking +
-//   `foundry.applications.instances` walking) consistently failed to
-//   close journals shown via `JournalEntry.show()` on v14 even when
-//   they looked correct in code. The DOM click works.
+//   Excluded apps (the GM control palette, settings/configuration
+//   dialogs, notification toasts, sidebar tabs) are skipped by
+//   constructor-name pattern. Every closed / skipped / failed app is
+//   logged at info level so a GM can paste the Table console output
+//   when something doesn't close.
 // ============================================================================
 
 import { MODULE_ID, BODY_CLASS_MODAL_BG } from "./module.mjs";
@@ -49,25 +40,10 @@ import { setHandler } from "./sockets.mjs";
 import { logger } from "./lib/logger.mjs";
 
 /**
- * CSS selectors that match the ROOT element of a window we should
- * NEVER auto-close, even if we find a close button inside it.
- *
- * @type {string[]}
- */
-const EXCLUDED_ROOT_SELECTORS = [
-  // Our own GM control palette. Shouldn't normally be open on the Table,
-  // but defensive: a GM could pop it open via the console.
-  "#community-screen-control-palette",
-  // Core configuration dialogs.
-  ".settings-config",
-  ".configure-application",
-  // The combat tracker, if popped out (rare on the Table).
-  "#combat-popout",
-];
-
-/**
- * Class-name substrings we will NEVER count as a "popout open" for
- * backdrop purposes. Defense-in-depth for the dim-overlay tracker.
+ * Class-name substrings we will NEVER auto-close — even if the
+ * registry walk picks them up. Used by both the close-all walk and
+ * the backdrop tracker. Substring match against `app.constructor.name`
+ * so we catch system subclasses.
  *
  * @type {string[]}
  */
@@ -77,6 +53,10 @@ const POPOUT_EXCLUDE_PATTERNS = [
   "Configure",
   "Notifications",
   "ControlPalette",
+  // Combat tracker (sidebar + popout variants).
+  "Combat",
+  // Toast notifications.
+  "Notification",
 ];
 
 /**
@@ -157,85 +137,134 @@ function scheduleBackdropUpdate() {
 // =====================================================================
 
 /**
- * Close every shareable popout currently rendered on the Table client
- * by walking the DOM and clicking each window's close button.
+ * Close every shareable popout currently rendered on the Table client.
  *
- * This is the same approach `gsimon2/close-player-art` takes, and it
- * sidesteps a class of failures we hit calling `app.close()` directly
- * — chiefly journal sheets shown via `JournalEntry.show()` not
- * actually closing despite being reachable via
- * `foundry.applications.instances`.
+ * Approach (Foundry v14):
+ *   AppV2 instances expose `.window.close` — a direct reference to the
+ *   close button HTMLButtonElement. We iterate
+ *   `foundry.applications.instances` and synthesize a `.click()` on
+ *   each app's own close-button reference. This goes through Foundry's
+ *   regular close handler exactly as if the user pressed the X, and
+ *   doesn't depend on:
+ *     - guessing CSS selectors (different across v13/v14/system mods)
+ *     - the application's `.close()` method actually closing the DOM
+ *       (which is the failure mode we hit in v0.1.7 / v0.1.8)
  *
- * Detection:
- *   AppV2 (v14): root element matches `.application[data-application-id]`;
- *                close button is `<button data-action="close">` inside
- *                the window's `<header>`.
- *   AppV1 (legacy): root element matches `.app.window-app`; close button
- *                is `<a class="header-button close">` or `<a class="close">`.
+ *   For each app, we fall back through three close strategies in order:
+ *     1. Click `app.window.close` (AppV2 button reference)
+ *     2. Click any close-shaped button inside `app.element` (covers v1
+ *        sheets and odd AppV2 variants that don't expose `.window.close`)
+ *     3. Call `await app.close({ animate: false })` (last resort)
  *
- * Excluded windows (the GM control palette, settings/configuration
- * dialogs, the combat-popout) are skipped by root-selector match.
+ *   Excluded apps (the GM control palette, settings/configuration
+ *   dialogs, notification toasts) are skipped by constructor-name match.
+ *
+ *   Every closed/skipped/failed app is logged so failures are diagnosable
+ *   from the Table console.
  *
  * @returns {Promise<void>}
  */
 async function _closeAllPopups() {
   if (!isTableUser()) return;
-  logger.info("closeAllPopups: DOM-click strategy on Table client.");
+  logger.info("closeAllPopups: starting on Table client.");
 
-  // Find every top-level window-app root in the DOM. Use a Set so
-  // elements that match both selectors (rare; some AppV2 sheets add
-  // .window-app for backwards-compatible styling) are deduped.
-  const appRoots = new Set();
-  for (const el of document.querySelectorAll(".application[data-application-id]")) {
-    appRoots.add(el);
+  // Collect every app instance from both registries. Use a Set to dedupe
+  // in case an app shows up in both for some reason.
+  const allApps = new Set();
+  const instances = foundry.applications?.instances;
+  if (instances && typeof instances.values === "function") {
+    for (const app of instances.values()) allApps.add(app);
   }
-  for (const el of document.querySelectorAll(".app.window-app")) {
-    appRoots.add(el);
-  }
+  for (const app of Object.values(ui?.windows ?? {})) allApps.add(app);
 
-  // Selectors for the close button, scoped to the window's header so
-  // we don't accidentally fire a "close"-named button inside content.
-  const CLOSE_BTN_SELECTOR = [
-    'header button[data-action="close"]',
-    '.window-header button[data-action="close"]',
-    "header a.header-button.close",
-    ".window-header a.header-button.close",
-    "header a.close",
-    ".window-header a.close",
-  ].join(", ");
+  let closed = 0;
+  const closedNames = [];
+  const skippedNames = [];
+  const failedNames = [];
 
-  let clicked = 0;
-  const clickedLabels = [];
+  for (const app of allApps) {
+    if (!app) continue;
+    const name = app.constructor?.name ?? "(anonymous)";
 
-  for (const root of appRoots) {
-    // Skip windows on the excluded list (control palette, settings, etc.).
-    if (EXCLUDED_ROOT_SELECTORS.some((sel) => root.matches(sel))) continue;
+    // Skip excluded apps — control palette, settings, etc.
+    if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) {
+      skippedNames.push(name);
+      continue;
+    }
 
-    // Skip minimized windows — clicking close on them sometimes triggers
-    // a "are you sure?" path in v1 sheets.
-    if (root.classList.contains("minimized")) continue;
+    // Skip apps that are explicitly minimized — closing those can trigger
+    // confirmation paths in some legacy v1 sheets.
+    if (app.minimized === true) {
+      skippedNames.push(`${name}(min)`);
+      continue;
+    }
 
-    const btn = root.querySelector(CLOSE_BTN_SELECTOR);
-    if (!btn) continue;
-
-    try {
-      // Simulate the user pressing the X. Goes through Foundry's normal
-      // close handler regardless of whether the app instance is reachable
-      // through the application registries.
-      btn.click();
-      clicked++;
-      // Identifier for the log — id is set for AppV2 with options.id,
-      // otherwise fall back to a short class string.
-      clickedLabels.push(root.id || root.className.split(" ").slice(0, 3).join("."));
-    } catch (err) {
-      logger.warn("close-button click failed on", root.id || root.className, err);
+    const ok = await closeOneApp(app, name);
+    if (ok) {
+      closed++;
+      closedNames.push(name);
+    } else {
+      failedNames.push(name);
     }
   }
 
-  logger.info(`closeAllPopups: clicked ${clicked} close button(s):`, clickedLabels);
-  // Foundry's close handler is async; give it a frame to remove the
-  // DOM before we recompute the backdrop.
+  logger.info(`closeAllPopups: closed ${closed}/${allApps.size}.`, {
+    closed: closedNames,
+    skipped: skippedNames,
+    failed: failedNames,
+  });
+  // Recompute the backdrop after Foundry's async close handlers run.
   scheduleBackdropUpdate();
+}
+
+/**
+ * Try to close a single Foundry application via the most reliable
+ * strategy that applies. Returns true on apparent success.
+ *
+ * @param {object} app  - Foundry ApplicationV1 or V2 instance.
+ * @param {string} name - Constructor name, for logging.
+ * @returns {Promise<boolean>}
+ */
+async function closeOneApp(app, name) {
+  // Strategy 1: AppV2 stores its close-button HTMLButtonElement at
+  // `app.window.close`. Clicking it triggers Foundry's own close
+  // handler — the most reliable path on v14.
+  const btn = app.window?.close;
+  if (btn && typeof btn.click === "function") {
+    try {
+      btn.click();
+      return true;
+    } catch (err) {
+      logger.warn(`window.close.click() failed for ${name}:`, err);
+    }
+  }
+
+  // Strategy 2: try to find a close button in the app's DOM tree
+  // ourselves. Covers legacy AppV1 (.close link) and any AppV2 variant
+  // that doesn't expose `.window.close`.
+  const root = app.element instanceof HTMLElement ? app.element : app.element?.[0];
+  if (root) {
+    const fallbackBtn = root.querySelector(
+      'button[data-action="close"], a.header-button.close, a.close',
+    );
+    if (fallbackBtn) {
+      try {
+        fallbackBtn.click();
+        return true;
+      } catch (err) {
+        logger.warn(`element close-button click failed for ${name}:`, err);
+      }
+    }
+  }
+
+  // Strategy 3: fall back to the app's `.close()` method.
+  try {
+    await app.close({ animate: false });
+    return true;
+  } catch (err) {
+    logger.warn(`close() failed for ${name}:`, err);
+    return false;
+  }
 }
 
 /**
@@ -247,8 +276,13 @@ async function _closeAllPopups() {
  */
 async function _showImage({ src, caption, title } = {}) {
   if (!isTableUser()) return;
-  // Defensive: src is the only thing we actually need.
-  if (!src) return;
+  // Defensive: src is the only thing we actually need. If a push
+  // arrived without one, log loudly — that's a sender-side bug we'd
+  // rather surface than hide.
+  if (!src) {
+    logger.warn(`showImage: ignoring push with empty src (title="${title}")`);
+    return;
+  }
   logger.info(`showImage: ${src}`);
   try {
     // v14 namespace; fall back to legacy global for resilience.

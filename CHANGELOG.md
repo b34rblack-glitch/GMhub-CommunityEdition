@@ -18,27 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Close All actually closes journals on v14 (DOM-click strategy).**
-  v0.1.7 and v0.1.8 both tried to close pushed journals by walking
-  Foundry's application registries / document collections and calling
-  `app.close()` on the resulting instances. Both releases shipped
-  fixes that looked correct in code but didn't actually close the
-  journal on the Table client in practice — the journal stayed open
-  no matter what.
+- **Close All uses Foundry's own close-button reference now.** v0.1.9
+  shipped a DOM-walk that searched for window roots via CSS selectors
+  (`.application[data-application-id]`, `.app.window-app`) and clicked
+  any child `<button data-action="close">`. The selectors didn't match
+  the actual DOM on the user's v14 install — close-all closed
+  literally nothing.
 
-  Pivoted to the `gsimon2/close-player-art` approach: walk the DOM
-  for every visible window-app and synthesize a `.click()` on its
-  close button. This bypasses the application-instance code path
-  entirely; the click goes through Foundry's normal close handler
-  exactly as if the user pressed the X in the corner.
+  Pivoted again: iterate `foundry.applications.instances` (v14 AppV2)
+  and `ui.windows` (legacy v1) directly, and for each non-excluded
+  popout try three close strategies in order:
+  1. Click `app.window.close` — Foundry's own HTMLButtonElement
+     reference to the X button. Most reliable on v14.
+  2. `querySelector` inside `app.element` for any
+     `button[data-action="close"]`, `a.header-button.close`, or
+     `a.close`.
+  3. Fall back to `await app.close({ animate: false })`.
 
-  Detection covers both Foundry v14 AppV2 sheets
-  (`.application[data-application-id]` with
-  `<button data-action="close">` in the header) and legacy AppV1
-  sheets (`.app.window-app` with `<a class="close">`). An exclude
-  list — the GM control palette, settings/configuration dialogs,
-  combat popout — skips windows we never want to auto-close. Logs
-  each click for diagnostics from the Table console.
+  Excluded apps (`Settings` / `Sidebar` / `Configure` /
+  `Notifications` / `ControlPalette` / `Combat`) and minimized apps
+  are skipped. Every closed / skipped / failed app is logged at info
+  level, so a stuck close can be diagnosed from the Table console.
+
+- **Actor pushes fall back through plausible image sources.**
+  Previously the push handler shipped `actor.img` and silently failed
+  if it was empty. Now it tries `actor.img`, then
+  `prototypeToken.texture.src`, then `token.texture.src` in order, and
+  warns the GM with a notification (rather than appearing to succeed
+  but showing nothing) if none of them resolve. Also logs the resolved
+  `src` so the Table console can confirm what was sent.
+
+- **`showImage` warns on empty src instead of silently dropping.**
+  Previously, an actor or item push with no image would silently
+  return on the Table client. Now it logs a warning so the GM can see
+  the bad push in the Table console.
 
 - **Item and actor pushes now actually display.** v0.1.5 routed
   items/portraits through `ImagePopout.shareImage`, but that API's
