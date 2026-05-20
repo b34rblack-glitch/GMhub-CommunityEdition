@@ -18,6 +18,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Close All now reliably closes pushed journals.** The previous
+  implementation walked Foundry's application registries and matched
+  on constructor-name substrings. Journals pushed via
+  `JournalEntry.show()` ended up rendered under a class name that the
+  permissive fallback only reached when the strict pass returned
+  exactly zero hits — so as soon as an `ImagePopout` was open
+  alongside a journal, the strict match found the popout and the
+  fallback never ran, leaving the journal stranded.
+
+  Replaced the strict-then-fallback design with two independent
+  strategies unioned via a Set:
+  1. Walk document collections (`game.journal`, `game.items`,
+     `game.actors`, `game.scenes`, `game.macros`, `game.tables`,
+     `game.cards`) and close any document whose `_sheet` (or
+     app registered via `Document#apps`) is currently rendered.
+     Class-name agnostic — works regardless of system subclass
+     (`JournalEntrySheetPF2e` and friends) or future sheet rename.
+
+  2. Walk `foundry.applications.instances` (v14 AppV2) and
+     `ui.windows` (legacy AppV1) and close anything that's
+     popout-shaped (`.window` set, or `options.popOut === true`)
+     and not in the exclude list. Catches `ImagePopout` (used for
+     items, portraits, and raw image pushes) and any other
+     document-less popups.
+
+  Both strategies run every time, so an open journal alongside an
+  open image popout no longer hides the journal from the close walk.
+
 - **Item and actor pushes now actually display.** v0.1.5 routed
   items/portraits through `ImagePopout.shareImage`, but that API's
   signature has shifted across Foundry v11/v12/v13/v14 and the
@@ -25,17 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `showImage` socketlib handler, which opens a fresh `ImagePopout`
   locally on the Table client with the URL/title/caption we send.
   Same path that was already working for raw images.
-- **Close All now closes journal popouts.** Broadened the
-  popout-class substring list to include `JournalTextPageSheet`,
-  `JournalImagePageSheet`, `JournalVideoPageSheet`,
-  `JournalPDFPageSheet`, `ItemSheet`, `ActorSheet`. Added an exclude
-  list (`Settings` / `Sidebar` / `Configure` / `Notifications` /
-  `ControlPalette`) so the close walk can't kill the Table's own
-  module-config dialog if one happens to be open. Added a permissive
-  fallback: if the strict pattern match finds zero hits, close any
-  `window-app` instead so a GM-stranded popup always has an exit.
-  Logs the full list of constructor names seen so future close
-  failures are diagnosable from the Table console.
 
 ### Changed
 

@@ -10,11 +10,6 @@
 //
 // This version uses Foundry's NATIVE share mechanisms — the same paths the
 // "Show to Players" right-click action uses — and only OWNS the close side.
-// Pattern adapted from `gsimon2/close-player-art`, which has been the
-// de-facto reference for "close shared art across all clients" and is
-// v12-verified; the same instance-walk close strategy works just as well in
-// v14 against `foundry.applications.instances` and the legacy `ui.windows`
-// collection.
 //
 // What's native:
 //   - Journals  → `JournalEntry.prototype.show(true, [tableUser])` (GM-side
@@ -25,12 +20,23 @@
 //   - Portraits → same `showImage` socket path
 //   - Raw image → same `showImage` socket path
 //
-// What's our own:
-//   - Close all: socketlib RPC to the Table, which walks
-//     `foundry.applications.instances` and closes every active popout
-//     whose constructor name matches a known pattern, with a permissive
-//     fallback that closes any window-app if the strict match returns
-//     zero (so the GM always has an escape hatch).
+// What's our own — Close All:
+//   socketlib RPC to the Table. The close walk uses TWO independent
+//   strategies, unioned via a Set so each app is closed exactly once:
+//
+//   1. Walk document collections (`game.journal`, `game.items`,
+//      `game.actors`, `game.scenes`, `game.macros`, `game.tables`,
+//      `game.cards`) and close any document whose sheet is currently
+//      rendered. This is class-name-agnostic — it works regardless of
+//      what subclass Foundry / the active system uses for the sheet,
+//      which historically has been the failure mode for journal pushes
+//      delivered via `JournalEntry.show()`.
+//
+//   2. Walk `foundry.applications.instances` (v14 AppV2 registry) and
+//      `ui.windows` (legacy AppV1 registry) and close anything that
+//      looks like a popout window AND isn't in our exclude list. This
+//      catches popouts that aren't owned by a document — chiefly
+//      `ImagePopout` (used for items, portraits, and raw image pushes).
 // ============================================================================
 
 import { MODULE_ID, BODY_CLASS_MODAL_BG } from "./module.mjs";
@@ -40,30 +46,19 @@ import { setHandler } from "./sockets.mjs";
 import { logger } from "./lib/logger.mjs";
 
 /**
- * Foundry application class names we consider "shareable popouts" for the
- * purposes of close-all. Substring match against the constructor name so
- * we catch system-specific subclasses (e.g. `JournalEntrySheetPF2e`).
+ * Document collections we walk on the Table client during close-all and
+ * popout-counting. The corresponding `game.<key>` collection holds every
+ * document whose sheet could plausibly be rendered as a result of a push.
  *
  * @type {string[]}
  */
-const POPOUT_CLASS_PATTERNS = [
-  "ImagePopout",
-  "JournalSheet",
-  "JournalEntrySheet",
-  "JournalEntryPageSheet",
-  "JournalTextPageSheet",
-  "JournalImagePageSheet",
-  "JournalVideoPageSheet",
-  "JournalPDFPageSheet",
-  "ItemSheet",
-  "ActorSheet",
-];
+const DOC_COLLECTION_KEYS = ["journal", "items", "actors", "scenes", "macros", "tables", "cards"];
 
 /**
- * Class names we will NEVER close even if they match the patterns above
- * (defense-in-depth — the Table client shouldn't have anything besides
- * the canvas open, but if a settings dialog or chat window happens to
- * be open we don't want to nuke it).
+ * Class-name substrings we will NEVER close even if they look like
+ * popouts (defense-in-depth — the Table client shouldn't have anything
+ * besides the canvas open, but if a settings dialog or our own control
+ * palette happens to be open we don't want to nuke it).
  *
  * @type {string[]}
  */
@@ -111,33 +106,27 @@ function countOpenPopouts() {
 }
 
 /**
- * @param {object} app
- * @returns {boolean} True if the app looks like something we'd close on Close-All.
- */
-function isPopoutLike(app) {
-  // Defensive: minified/unusual apps may lack a constructor name.
-  const name = app?.constructor?.name ?? "";
-  if (!name) return false;
-  // Exclude list wins over include list.
-  if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) return false;
-  return POPOUT_CLASS_PATTERNS.some((p) => name.includes(p));
-}
-
-/**
- * Permissive fallback — treat anything that looks like a floating window
- * (has a position and a constructor whose name doesn't match the exclude
- * list) as closable. Only used after the strict match returns zero hits.
+ * Permissive popout test. Returns true for any rendered, floating
+ * window-app on the client whose constructor name doesn't match the
+ * exclude list. We deliberately avoid class-name include matching —
+ * Foundry / system subclasses can name sheets anything they like
+ * (`JournalEntrySheet`, `JournalEntrySheetPF2e`, future sheet variants),
+ * and any include list will drift out of date.
+ *
+ * AppV2 always has a `.window` object; legacy AppV1 popouts have
+ * `options.popOut === true`. Either is sufficient.
  *
  * @param {object} app
  * @returns {boolean}
  */
-function isAnyWindowApp(app) {
-  const name = app?.constructor?.name ?? "";
+function isPopoutLike(app) {
+  if (!app) return false;
+  const name = app.constructor?.name ?? "";
+  // Defensive: minified or anonymous classes may lack a name.
   if (!name) return false;
   if (POPOUT_EXCLUDE_PATTERNS.some((p) => name.includes(p))) return false;
-  // AppV2 always has a .window object; AppV1 has .options.popOut.
-  const isAppV2 = !!app?.window;
-  const isAppV1Popout = app?.options?.popOut === true;
+  const isAppV2 = !!app.window;
+  const isAppV1Popout = app.options?.popOut === true;
   return isAppV2 || isAppV1Popout;
 }
 
@@ -161,13 +150,57 @@ function scheduleBackdropUpdate() {
 /**
  * Close every shareable popout currently rendered on the Table client.
  *
+ * Two strategies are used and unioned via a Set:
+ *
+ *   1. Walk document collections (journals, items, actors, scenes,
+ *      macros, tables, cards). For each document, close any rendered
+ *      sheet referenced by `doc._sheet` or registered against
+ *      `doc.apps`. This is the reliable path for sheets opened by
+ *      Foundry's native share flow (e.g. `JournalEntry.show()`) — it
+ *      doesn't depend on whether the sheet's class name matches any
+ *      pattern, which had been the dominant failure mode for journals.
+ *
+ *   2. Walk Foundry's app registries — `foundry.applications.instances`
+ *      (v14 AppV2) and `ui.windows` (legacy AppV1) — and close
+ *      anything that's popout-shaped and not in the exclude list. This
+ *      catches popouts that aren't owned by a document, chiefly
+ *      `ImagePopout` (item images, portraits, raw image pushes).
+ *
+ * The two strategies are unioned so the same sheet is never closed
+ * twice, even though a document's sheet appears in both.
+ *
  * @returns {Promise<void>}
  */
 async function _closeAllPopups() {
   if (!isTableUser()) return;
-  logger.info("closeAllPopups — walking foundry.applications.instances + ui.windows");
+  logger.info("closeAllPopups: starting on Table client.");
 
-  // Collect everything currently open across both registries.
+  // Set, not Array — a document's sheet shows up in both the document's
+  // own `_sheet` reference AND the global instances registry, and we
+  // only want to close it once.
+  const targets = new Set();
+
+  // Strategy 1: walk every document collection that could plausibly
+  // have a pushed sheet rendered. `doc._sheet` is the lazy backing for
+  // the `doc.sheet` getter; reading the private field avoids
+  // instantiating a fresh sheet for documents that have never been
+  // opened (the getter creates one on first access).
+  for (const key of DOC_COLLECTION_KEYS) {
+    const coll = game[key];
+    if (!coll) continue;
+    for (const doc of coll) {
+      if (doc._sheet?.rendered) targets.add(doc._sheet);
+      // ClientDocumentMixin#apps holds every AppV1/V2 registered against
+      // the document — typically just the sheet, but a system may
+      // register additional sub-applications.
+      for (const app of Object.values(doc.apps ?? {})) {
+        if (app?.rendered) targets.add(app);
+      }
+    }
+  }
+
+  // Strategy 2: walk Foundry's global app registries for popouts that
+  // aren't owned by a document.
   const allApps = [];
   const instances = foundry.applications?.instances;
   if (instances && typeof instances.values === "function") {
@@ -175,31 +208,21 @@ async function _closeAllPopups() {
   }
   for (const app of Object.values(ui?.windows ?? {})) allApps.push(app);
 
-  // Dump every candidate's constructor name so close failures are
-  // diagnosable from the Table console.
-  logger.info(
-    "closeAllPopups candidates:",
-    allApps.map((a) => a?.constructor?.name).filter(Boolean),
-  );
-
-  // Strict pass: anything matching the known popout patterns.
-  let toClose = allApps.filter(isPopoutLike);
-
-  // Permissive fallback: if the strict pass found nothing, close any
-  // floating window. Better to close a stray sheet than to leave the
-  // Table screen with an open popup the GM can't get rid of.
-  if (toClose.length === 0) {
-    toClose = allApps.filter(isAnyWindowApp);
-    if (toClose.length > 0) {
-      logger.info(
-        `closeAllPopups: strict match found 0; using permissive fallback (${toClose.length}).`,
-      );
-    }
+  for (const app of allApps) {
+    if (!app || targets.has(app)) continue;
+    if (isPopoutLike(app)) targets.add(app);
   }
+
+  // Dump every target's constructor name so close failures are
+  // diagnosable from the Table console.
+  const names = Array.from(targets)
+    .map((a) => a?.constructor?.name)
+    .filter(Boolean);
+  logger.info(`closeAllPopups: closing ${targets.size} popout(s):`, names);
 
   // Close them, counting successes so the summary log is accurate.
   let closed = 0;
-  for (const app of toClose) {
+  for (const app of targets) {
     try {
       await app.close({ animate: false });
       closed++;
@@ -210,7 +233,7 @@ async function _closeAllPopups() {
 
   // Recompute the backdrop now that windows are gone.
   scheduleBackdropUpdate();
-  logger.info(`closeAllPopups: closed ${closed} of ${toClose.length} popout(s).`);
+  logger.info(`closeAllPopups: closed ${closed} of ${targets.size} popout(s).`);
 }
 
 /**
