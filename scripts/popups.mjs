@@ -20,23 +20,26 @@
 //   - Portraits → same `showImage` socket path
 //   - Raw image → same `showImage` socket path
 //
-// What's our own — Close All:
-//   socketlib RPC to the Table. The close walk uses TWO independent
-//   strategies, unioned via a Set so each app is closed exactly once:
+// What's our own — Close All (DOM-click strategy):
+//   socketlib RPC to the Table runs a DOM walk over every visible
+//   window-app and synthesizes a click on each one's close button. This
+//   is the same brute-force approach `gsimon2/close-player-art` uses,
+//   and it's MORE reliable than calling `app.close()` on the application
+//   instance because:
 //
-//   1. Walk document collections (`game.journal`, `game.items`,
-//      `game.actors`, `game.scenes`, `game.macros`, `game.tables`,
-//      `game.cards`) and close any document whose sheet is currently
-//      rendered. This is class-name-agnostic — it works regardless of
-//      what subclass Foundry / the active system uses for the sheet,
-//      which historically has been the failure mode for journal pushes
-//      delivered via `JournalEntry.show()`.
+//     (a) it bypasses any quirk where `_showEntry`-rendered sheets
+//         aren't reachable through `foundry.applications.instances`,
+//     (b) it goes through Foundry's normal close handler exactly as if
+//         the user pressed the X — animations, hooks, document
+//         dereferencing all fire the way they should,
+//     (c) it's class-name agnostic — works for `JournalEntrySheet`,
+//         system subclasses like `JournalEntrySheetPF2e`, ImagePopout,
+//         ItemSheet, and anything else that has a header close button.
 //
-//   2. Walk `foundry.applications.instances` (v14 AppV2 registry) and
-//      `ui.windows` (legacy AppV1 registry) and close anything that
-//      looks like a popout window AND isn't in our exclude list. This
-//      catches popouts that aren't owned by a document — chiefly
-//      `ImagePopout` (used for items, portraits, and raw image pushes).
+//   Previous strategies (document-collection walking +
+//   `foundry.applications.instances` walking) consistently failed to
+//   close journals shown via `JournalEntry.show()` on v14 even when
+//   they looked correct in code. The DOM click works.
 // ============================================================================
 
 import { MODULE_ID, BODY_CLASS_MODAL_BG } from "./module.mjs";
@@ -46,19 +49,25 @@ import { setHandler } from "./sockets.mjs";
 import { logger } from "./lib/logger.mjs";
 
 /**
- * Document collections we walk on the Table client during close-all and
- * popout-counting. The corresponding `game.<key>` collection holds every
- * document whose sheet could plausibly be rendered as a result of a push.
+ * CSS selectors that match the ROOT element of a window we should
+ * NEVER auto-close, even if we find a close button inside it.
  *
  * @type {string[]}
  */
-const DOC_COLLECTION_KEYS = ["journal", "items", "actors", "scenes", "macros", "tables", "cards"];
+const EXCLUDED_ROOT_SELECTORS = [
+  // Our own GM control palette. Shouldn't normally be open on the Table,
+  // but defensive: a GM could pop it open via the console.
+  "#community-screen-control-palette",
+  // Core configuration dialogs.
+  ".settings-config",
+  ".configure-application",
+  // The combat tracker, if popped out (rare on the Table).
+  "#combat-popout",
+];
 
 /**
- * Class-name substrings we will NEVER close even if they look like
- * popouts (defense-in-depth — the Table client shouldn't have anything
- * besides the canvas open, but if a settings dialog or our own control
- * palette happens to be open we don't want to nuke it).
+ * Class-name substrings we will NEVER count as a "popout open" for
+ * backdrop purposes. Defense-in-depth for the dim-overlay tracker.
  *
  * @type {string[]}
  */
@@ -148,92 +157,85 @@ function scheduleBackdropUpdate() {
 // =====================================================================
 
 /**
- * Close every shareable popout currently rendered on the Table client.
+ * Close every shareable popout currently rendered on the Table client
+ * by walking the DOM and clicking each window's close button.
  *
- * Two strategies are used and unioned via a Set:
+ * This is the same approach `gsimon2/close-player-art` takes, and it
+ * sidesteps a class of failures we hit calling `app.close()` directly
+ * — chiefly journal sheets shown via `JournalEntry.show()` not
+ * actually closing despite being reachable via
+ * `foundry.applications.instances`.
  *
- *   1. Walk document collections (journals, items, actors, scenes,
- *      macros, tables, cards). For each document, close any rendered
- *      sheet referenced by `doc._sheet` or registered against
- *      `doc.apps`. This is the reliable path for sheets opened by
- *      Foundry's native share flow (e.g. `JournalEntry.show()`) — it
- *      doesn't depend on whether the sheet's class name matches any
- *      pattern, which had been the dominant failure mode for journals.
+ * Detection:
+ *   AppV2 (v14): root element matches `.application[data-application-id]`;
+ *                close button is `<button data-action="close">` inside
+ *                the window's `<header>`.
+ *   AppV1 (legacy): root element matches `.app.window-app`; close button
+ *                is `<a class="header-button close">` or `<a class="close">`.
  *
- *   2. Walk Foundry's app registries — `foundry.applications.instances`
- *      (v14 AppV2) and `ui.windows` (legacy AppV1) — and close
- *      anything that's popout-shaped and not in the exclude list. This
- *      catches popouts that aren't owned by a document, chiefly
- *      `ImagePopout` (item images, portraits, raw image pushes).
- *
- * The two strategies are unioned so the same sheet is never closed
- * twice, even though a document's sheet appears in both.
+ * Excluded windows (the GM control palette, settings/configuration
+ * dialogs, the combat-popout) are skipped by root-selector match.
  *
  * @returns {Promise<void>}
  */
 async function _closeAllPopups() {
   if (!isTableUser()) return;
-  logger.info("closeAllPopups: starting on Table client.");
+  logger.info("closeAllPopups: DOM-click strategy on Table client.");
 
-  // Set, not Array — a document's sheet shows up in both the document's
-  // own `_sheet` reference AND the global instances registry, and we
-  // only want to close it once.
-  const targets = new Set();
-
-  // Strategy 1: walk every document collection that could plausibly
-  // have a pushed sheet rendered. `doc._sheet` is the lazy backing for
-  // the `doc.sheet` getter; reading the private field avoids
-  // instantiating a fresh sheet for documents that have never been
-  // opened (the getter creates one on first access).
-  for (const key of DOC_COLLECTION_KEYS) {
-    const coll = game[key];
-    if (!coll) continue;
-    for (const doc of coll) {
-      if (doc._sheet?.rendered) targets.add(doc._sheet);
-      // ClientDocumentMixin#apps holds every AppV1/V2 registered against
-      // the document — typically just the sheet, but a system may
-      // register additional sub-applications.
-      for (const app of Object.values(doc.apps ?? {})) {
-        if (app?.rendered) targets.add(app);
-      }
-    }
+  // Find every top-level window-app root in the DOM. Use a Set so
+  // elements that match both selectors (rare; some AppV2 sheets add
+  // .window-app for backwards-compatible styling) are deduped.
+  const appRoots = new Set();
+  for (const el of document.querySelectorAll(".application[data-application-id]")) {
+    appRoots.add(el);
+  }
+  for (const el of document.querySelectorAll(".app.window-app")) {
+    appRoots.add(el);
   }
 
-  // Strategy 2: walk Foundry's global app registries for popouts that
-  // aren't owned by a document.
-  const allApps = [];
-  const instances = foundry.applications?.instances;
-  if (instances && typeof instances.values === "function") {
-    for (const app of instances.values()) allApps.push(app);
-  }
-  for (const app of Object.values(ui?.windows ?? {})) allApps.push(app);
+  // Selectors for the close button, scoped to the window's header so
+  // we don't accidentally fire a "close"-named button inside content.
+  const CLOSE_BTN_SELECTOR = [
+    'header button[data-action="close"]',
+    '.window-header button[data-action="close"]',
+    "header a.header-button.close",
+    ".window-header a.header-button.close",
+    "header a.close",
+    ".window-header a.close",
+  ].join(", ");
 
-  for (const app of allApps) {
-    if (!app || targets.has(app)) continue;
-    if (isPopoutLike(app)) targets.add(app);
-  }
+  let clicked = 0;
+  const clickedLabels = [];
 
-  // Dump every target's constructor name so close failures are
-  // diagnosable from the Table console.
-  const names = Array.from(targets)
-    .map((a) => a?.constructor?.name)
-    .filter(Boolean);
-  logger.info(`closeAllPopups: closing ${targets.size} popout(s):`, names);
+  for (const root of appRoots) {
+    // Skip windows on the excluded list (control palette, settings, etc.).
+    if (EXCLUDED_ROOT_SELECTORS.some((sel) => root.matches(sel))) continue;
 
-  // Close them, counting successes so the summary log is accurate.
-  let closed = 0;
-  for (const app of targets) {
+    // Skip minimized windows — clicking close on them sometimes triggers
+    // a "are you sure?" path in v1 sheets.
+    if (root.classList.contains("minimized")) continue;
+
+    const btn = root.querySelector(CLOSE_BTN_SELECTOR);
+    if (!btn) continue;
+
     try {
-      await app.close({ animate: false });
-      closed++;
+      // Simulate the user pressing the X. Goes through Foundry's normal
+      // close handler regardless of whether the app instance is reachable
+      // through the application registries.
+      btn.click();
+      clicked++;
+      // Identifier for the log — id is set for AppV2 with options.id,
+      // otherwise fall back to a short class string.
+      clickedLabels.push(root.id || root.className.split(" ").slice(0, 3).join("."));
     } catch (err) {
-      logger.warn(`close failed for ${app?.constructor?.name}:`, err);
+      logger.warn("close-button click failed on", root.id || root.className, err);
     }
   }
 
-  // Recompute the backdrop now that windows are gone.
+  logger.info(`closeAllPopups: clicked ${clicked} close button(s):`, clickedLabels);
+  // Foundry's close handler is async; give it a frame to remove the
+  // DOM before we recompute the backdrop.
   scheduleBackdropUpdate();
-  logger.info(`closeAllPopups: closed ${closed} of ${targets.size} popout(s).`);
 }
 
 /**

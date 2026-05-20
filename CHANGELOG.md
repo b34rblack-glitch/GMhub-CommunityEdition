@@ -18,33 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Close All now reliably closes pushed journals.** The previous
-  implementation walked Foundry's application registries and matched
-  on constructor-name substrings. Journals pushed via
-  `JournalEntry.show()` ended up rendered under a class name that the
-  permissive fallback only reached when the strict pass returned
-  exactly zero hits — so as soon as an `ImagePopout` was open
-  alongside a journal, the strict match found the popout and the
-  fallback never ran, leaving the journal stranded.
+- **Close All actually closes journals on v14 (DOM-click strategy).**
+  v0.1.7 and v0.1.8 both tried to close pushed journals by walking
+  Foundry's application registries / document collections and calling
+  `app.close()` on the resulting instances. Both releases shipped
+  fixes that looked correct in code but didn't actually close the
+  journal on the Table client in practice — the journal stayed open
+  no matter what.
 
-  Replaced the strict-then-fallback design with two independent
-  strategies unioned via a Set:
-  1. Walk document collections (`game.journal`, `game.items`,
-     `game.actors`, `game.scenes`, `game.macros`, `game.tables`,
-     `game.cards`) and close any document whose `_sheet` (or
-     app registered via `Document#apps`) is currently rendered.
-     Class-name agnostic — works regardless of system subclass
-     (`JournalEntrySheetPF2e` and friends) or future sheet rename.
+  Pivoted to the `gsimon2/close-player-art` approach: walk the DOM
+  for every visible window-app and synthesize a `.click()` on its
+  close button. This bypasses the application-instance code path
+  entirely; the click goes through Foundry's normal close handler
+  exactly as if the user pressed the X in the corner.
 
-  2. Walk `foundry.applications.instances` (v14 AppV2) and
-     `ui.windows` (legacy AppV1) and close anything that's
-     popout-shaped (`.window` set, or `options.popOut === true`)
-     and not in the exclude list. Catches `ImagePopout` (used for
-     items, portraits, and raw image pushes) and any other
-     document-less popups.
-
-  Both strategies run every time, so an open journal alongside an
-  open image popout no longer hides the journal from the close walk.
+  Detection covers both Foundry v14 AppV2 sheets
+  (`.application[data-application-id]` with
+  `<button data-action="close">` in the header) and legacy AppV1
+  sheets (`.app.window-app` with `<a class="close">`). An exclude
+  list — the GM control palette, settings/configuration dialogs,
+  combat popout — skips windows we never want to auto-close. Logs
+  each click for diagnostics from the Table console.
 
 - **Item and actor pushes now actually display.** v0.1.5 routed
   items/portraits through `ImagePopout.shareImage`, but that API's
