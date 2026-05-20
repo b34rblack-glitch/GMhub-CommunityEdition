@@ -10,9 +10,21 @@
 // single place to see "what runs at what lifecycle stage and in what order".
 //
 // Hook flow:
-//   init       → register settings, then wire every feature
-//   ready      → log version banner; on the Table client engage the lock
-//   socketlib  → wait for socketlib to be ready, then register handlers
+//   init   → register settings, then wire every feature
+//   ready  → register socketlib handlers, log version banner, engage the
+//            canvas lock on the Table client
+//
+// Why is socket registration on `ready` and not `socketlib.ready`?
+// socketlib emits `socketlib.ready` synchronously from inside its own
+// `init` listener. Our `init` listener runs AFTER socketlib's, so the
+// `socketlib.ready` callback fires BEFORE our init has had a chance to
+// call `popups.init()` / `vision.init()` / etc. — and those are what
+// populate the real socket-handler map. If we register on
+// `socketlib.ready`, we register every name with the placeholder stub
+// in `sockets.mjs`, and the later `setHandler()` calls then fail
+// because socketlib refuses re-registration of an already-bound name.
+// Deferring registration to `ready` guarantees every feature module's
+// init has populated the handler map first.
 // ============================================================================
 
 // Module-wide constants for the version log.
@@ -71,6 +83,11 @@ Hooks.once("init", () => {
 // Foundry's `ready` hook: world is fully loaded, all settings/users
 // available, all other modules' init has run. Final wiring goes here.
 Hooks.once("ready", () => {
+  // Register socket handlers NOW (not on `socketlib.ready`) — see the
+  // top-of-file note for why. By `ready`, every feature module's init
+  // has populated the handlers map and socketlib's own init is done.
+  sockets.register();
+
   // Look up the manifest version for the banner.
   const version = game.modules.get(MODULE_ID)?.version ?? "unknown";
   logger.info(`Ready. Version ${version}.`);
@@ -84,11 +101,4 @@ Hooks.once("ready", () => {
       if (getSetting("table-mode", "play") === "play") engageLock();
     });
   }
-});
-
-// `socketlib.ready` is emitted by the socketlib hard-dependency module
-// once it has finished its own init. We register our handlers AFTER that
-// so the socket module is guaranteed to be available.
-Hooks.once("socketlib.ready", () => {
-  sockets.register();
 });

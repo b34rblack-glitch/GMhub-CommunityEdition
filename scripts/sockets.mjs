@@ -163,7 +163,13 @@ async function _refitScene() {
 
 /**
  * Register the module with socketlib and bind every handler name we expect.
- * Called from `Hooks.once("socketlib.ready")` in `main.mjs`.
+ * Called from `Hooks.once("ready")` in `main.mjs`, AFTER every feature
+ * module's init has run. Earlier-binding via `socketlib.ready` is not
+ * usable: socketlib emits that hook synchronously during its own init
+ * — i.e. before our `init` listener ever runs — so the handler map is
+ * still empty at that point. Doing the registration on `ready` (with
+ * socketlib's init long since complete) guarantees the real
+ * implementations are wired up instead of stubs.
  *
  * @returns {void}
  */
@@ -219,7 +225,7 @@ export function register() {
  * @returns {Promise<*>}
  */
 export async function executeAsUser(handler, userId, ...args) {
-  // Guard for callers that fire before socketlib.ready completes.
+  // Guard for callers that fire before `ready` completes the registration.
   if (!cs) {
     logger.warn(`Socket not ready when calling "${handler}".`);
     return undefined;
