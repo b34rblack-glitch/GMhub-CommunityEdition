@@ -78,11 +78,12 @@ export function engageLock() {
       .getElementById("board")
       ?.addEventListener("wheel", blockWheel, { capture: true, passive: false });
     // Replace Canvas.pan with a no-op so any caller's pan attempt fails silently.
-    libWrapper.register(MODULE_ID, "Canvas.prototype.pan", () => {}, "OVERRIDE");
+    // v14: Canvas is namespaced under `foundry.canvas.Canvas`.
+    libWrapper.register(MODULE_ID, "foundry.canvas.Canvas.prototype.pan", () => {}, "OVERRIDE");
     // Replace animatePan with a resolved promise so awaiters don't hang.
     libWrapper.register(
       MODULE_ID,
-      "Canvas.prototype.animatePan",
+      "foundry.canvas.Canvas.prototype.animatePan",
       () => Promise.resolve(),
       "OVERRIDE",
     );
@@ -115,12 +116,12 @@ export function disengageLock() {
       // throws if the name isn't registered (which can happen if engage
       // partially failed).
       try {
-        libWrapper.unregister(MODULE_ID, "Canvas.prototype.pan");
+        libWrapper.unregister(MODULE_ID, "foundry.canvas.Canvas.prototype.pan");
       } catch {
         // already unregistered
       }
       try {
-        libWrapper.unregister(MODULE_ID, "Canvas.prototype.animatePan");
+        libWrapper.unregister(MODULE_ID, "foundry.canvas.Canvas.prototype.animatePan");
       } catch {
         // already unregistered
       }

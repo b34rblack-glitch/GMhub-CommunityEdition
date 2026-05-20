@@ -18,6 +18,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Socket handlers were registering the stubs, not the real
+  implementations.** This is the actual root cause of everything that
+  was failing v0.1.7 through v0.1.10 — Close All "doing nothing", actor
+  pushes silently dropping, item pushes inconsistent.
+
+  socketlib emits its `socketlib.ready` hook **synchronously from
+  inside its own init listener**, which runs before our `init` listener
+  has a chance to populate the handler map. The result:
+  `sockets.register()` ran with an empty map and wired every name to a
+  placeholder stub. The later `setHandler()` calls from `popups.init()`
+  / `vision.init()` / `scene-follow.init()` tried to re-register the
+  same names, but socketlib refuses re-registration and silently
+  ignored them (the "Function X is already registered, ignoring
+  registration request" warning in the Table console). Every push and
+  every close-all has been hitting the stubs ever since the v0.1.5-era
+  split into feature modules.
+
+  Moved `sockets.register()` from `Hooks.once("socketlib.ready", ...)`
+  to `Hooks.once("ready", ...)`. By `ready`, every feature module's
+  init has populated the map and socketlib is fully initialized.
+  Confirmed in the Table console: the `stub:` log lines no longer
+  appear; the actual handlers run.
+
+- **`canvas-lock` no longer triggers v13/v14 deprecation warnings.**
+  Switched the libWrapper targets from `Canvas.prototype.pan` /
+  `Canvas.prototype.animatePan` to the v14 namespaced equivalents
+  under `foundry.canvas.Canvas`. The previous targets still resolved
+  (Foundry's backwards-compat layer) but spammed a deprecation error
+  every time the lock engaged/disengaged.
+
 - **Close All uses Foundry's own close-button reference now.** v0.1.9
   shipped a DOM-walk that searched for window roots via CSS selectors
   (`.application[data-application-id]`, `.app.window-app`) and clicked
