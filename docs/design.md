@@ -173,7 +173,12 @@ body.community-screen-hidden #board { cursor: default; }
 ```js
 let cs;
 
-Hooks.once("socketlib.ready", () => {
+// Register on `ready`, NOT on `socketlib.ready`. socketlib emits
+// `socketlib.ready` synchronously from inside its own init listener,
+// which runs before our feature-module inits have populated their
+// real handlers. Registering at that point would lock in placeholder
+// stubs because socketlib refuses to re-bind a name once it's set.
+Hooks.once("ready", () => {
   cs = socketlib.registerModule("community-screen");
   cs.register("showJournal", _showJournal);
   cs.register("showItem", _showItem);
@@ -186,11 +191,22 @@ Hooks.once("socketlib.ready", () => {
   cs.register("followLevel", _followLevel);
 });
 
-async function pushJournalToTable(journalUuid) {
+async function pushImageToTable(src, title) {
   const tableUserId = game.settings.get("community-screen", "tableUserId");
-  await cs.executeAsUser("showJournal", tableUserId, { uuid: journalUuid });
+  await cs.executeAsUser("showImage", tableUserId, { src, title });
 }
 ```
+
+**Note on journal pushes.** The MVP plan called for a custom
+`showJournal` socket handler that ships a uuid and renders the sheet
+on the Table client. The shipped implementation instead uses Foundry's
+native `JournalEntry.prototype.show(true, [tableUser])` — the same
+path the "Show to Players" right-click action uses — so the receiving
+client renders through its own sheet with no document-permission /
+`fromUuid` race. The `showJournal` socket handler is still registered
+as a backwards-compat stub for older GM clients pushing to a newer
+Table. See `scripts/push-buttons.mjs` for the GM side and
+`scripts/popups.mjs` for the Table side.
 
 Key socketlib methods: `executeAsUser(handlerName, userId, ...args)`, `executeAsGM(...)`, `executeForOthers(...)`, `executeForEveryone(...)`. All return promises and propagate values. Since this module fundamentally targets one specific user, `executeAsUser` is the workhorse.
 
@@ -251,6 +267,23 @@ Notes:
 - For centering sheets, pass `{ position: { left, top, width, height } }` to `render`, or use `sheet.setPosition(...)` after render.
 - **v14 native pop-out button:** AppV2 sheets get a "pop out" header control by default. Filter it off on the Table client (see §4.2).
 - `DialogV2` lives at `foundry.applications.api.DialogV2`. Old `Dialog` still works but deprecated.
+
+**Note on the shipped implementation.** The `openSheets` / `openImages`
+tracked-set pattern shown above is what the MVP plan called for. The
+shipped code does NOT maintain its own tracked sets — it iterates
+`foundry.applications.instances` and `ui.windows` and closes every
+popout-shaped app it finds (skipping an exclude list of Settings /
+Sidebar / Configure / Notifications / ControlPalette / Combat). Each
+close prefers `app.window.close.click()` — Foundry's own
+HTMLButtonElement reference to the X button — because calling
+`app.close()` directly turned out to be unreliable for journals
+opened via Foundry's native `_showEntry` socket flow. Authoritative
+behavior lives in `scripts/popups.mjs` (`_closeAllPopups`).
+
+Likewise, `_showJournal` / `_showItem` no longer render via a uuid
+lookup on the Table — they're backwards-compat shims. Real journal
+pushes ride `JournalEntry.show()`; real item / portrait pushes ride
+`_showImage` with the image URL shipped from the GM client.
 
 ### 3.6 Vision and perception
 

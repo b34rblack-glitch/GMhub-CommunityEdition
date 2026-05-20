@@ -20,7 +20,8 @@ PIXI v7 vs v8) is decided there.
   `.drawCircle()` / `lineStyle()`, **never** v8's `.circle()`.
 - **ESM only.** No build step. No TypeScript. No bundler.
 - **Hard dependencies (other Foundry modules):** `socketlib`, `lib-wrapper`.
-- **Soft recommends:** `sequencer`, `jb2a_patreon` (feature-detect, fall back).
+- **No soft recommends.** The active-turn highlight is rendered natively in
+  PIXI v7; the previous optional Sequencer + JB2A path was dropped in v0.1.2.
 - **Dev tooling:** Prettier + ESLint flat config. Nothing heavier. Dev deps only.
 - **No runtime npm packages.** Module ships as plain files.
 
@@ -93,8 +94,12 @@ npm run check           # Manifest + syntax + lint
 
 ## Current focus
 
-Building MVP v0.1.0 per `docs/design.md` §8 across 7 phases. See `CHANGELOG.md`
-for what's landed.
+MVP shipped — current line is v0.1.11. Maintenance + small fixes; see
+`CHANGELOG.md` for the running history. `docs/design.md` is the original
+canonical design; some §3.4 / §3.5 code samples predate the pivot to
+Foundry's native share APIs (`JournalEntry.show()` and our own
+`showImage` socketlib path) — the file headers in `scripts/popups.mjs`
+and `scripts/push-buttons.mjs` describe the actual current behavior.
 
 ## Things to never do
 

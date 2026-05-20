@@ -8,9 +8,14 @@
 //   - executeAsUser targets a single user (vs broadcasting to everyone).
 //   - Handles request/response framing so we don't roll our own.
 //
-// Handler names are the source of truth for the inter-client protocol. We
-// register ALL names up front; feature modules call setHandler(name, fn)
-// during their own init() to replace the stubs.
+// Handler names are the source of truth for the inter-client protocol.
+// Feature modules call `setHandler(name, fn)` from their own `init()` to
+// populate the internal handlers map. `register()` runs on Foundry's
+// `ready` hook (see main.mjs) and pushes every name to socketlib —
+// either the real handler that init wired up, or a placeholder stub
+// for names no feature module claimed. Order matters: socketlib refuses
+// to re-bind a name once it's registered, so setHandler must run BEFORE
+// register, which means setHandler is effectively an init-time-only API.
 //
 // Names registered:
 //   showJournal/Item/Image/Portrait — open content on the Table
@@ -39,7 +44,8 @@ import { set as setSetting, get as getSetting } from "./settings.mjs";
 let cs = null;
 
 /**
- * @returns {object | null} The socketlib handle, or null until socketlib.ready fires.
+ * @returns {object | null} The socketlib handle. Null until `register()`
+ *   runs from the `ready` hook (see main.mjs); non-null thereafter.
  */
 export function getSocket() {
   return cs;
@@ -69,9 +75,11 @@ function stub(name) {
 const handlers = new Map();
 
 /**
- * Replace a stub with a real implementation. Safe to call before or after
- * `register()` — if called after, the new handler is also pushed to
- * socketlib so the change takes immediate effect.
+ * Bind a real implementation to a handler name. **Must be called during
+ * `init`**, before `register()` runs on the `ready` hook — socketlib
+ * refuses to re-bind a name once it's been registered, so a call after
+ * `register()` updates the internal handlers map but won't actually
+ * route socket events to the new function.
  *
  * @param {string} name - Handler name.
  * @param {Function} fn - Async or sync handler.
@@ -79,14 +87,6 @@ const handlers = new Map();
  */
 export function setHandler(name, fn) {
   handlers.set(name, fn);
-  // If socketlib is already up, re-register so the new handler wins.
-  if (cs) {
-    try {
-      cs.register(name, fn);
-    } catch (err) {
-      logger.error(`Failed to re-register socket handler "${name}"`, err);
-    }
-  }
 }
 
 /**

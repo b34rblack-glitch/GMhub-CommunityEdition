@@ -6,9 +6,12 @@
 // Three layers of defense against the canvas being moved:
 //   1. A capture-phase `wheel` listener on `#board` that swallows scroll
 //      events before they reach PIXI's mousewheel handler.
-//   2. libWrapper OVERRIDE on `Canvas.prototype.pan` and `animatePan` so
-//      programmatic pans from other code (including Foundry core's own
-//      auto-pan on Token.control()) become no-ops.
+//   2. libWrapper OVERRIDE on `foundry.canvas.Canvas.prototype.pan` and
+//      `foundry.canvas.Canvas.prototype.animatePan` so programmatic pans
+//      from other code (including Foundry core's own auto-pan on
+//      Token.control()) become no-ops. Targeting the v14 namespaced
+//      paths avoids the deprecation warning the v13/v14 backwards-compat
+//      shim emits when you wrap the plain `Canvas` global.
 //   3. The `community-screen-locked` body class for any CSS-level hooks
 //      (we use it to neutralize cursor changes).
 //
