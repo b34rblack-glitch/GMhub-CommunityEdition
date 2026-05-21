@@ -131,9 +131,14 @@ function scheduleBackdropUpdate() {
 }
 
 // =====================================================================
-// Socket handlers. The Table client is the receiver for closeAllPopups;
-// the other push handlers exist for backwards compatibility but route to
-// Foundry's native share when invoked.
+// Socket handlers. `closeAllPopups` and `showImage` are the real
+// receivers — `showImage` renders a fresh ImagePopout for items,
+// portraits, and raw image pushes; `closeAllPopups` walks the app
+// registries (see above). `showJournal` and `showItem` are kept as
+// legacy compat shims: the current GM client never dispatches them
+// (journals go through Foundry's native `JournalEntry.show()`, items
+// ride the `showImage` path), but a mid-update GM running an older
+// build against a newer Table client still sees something happen.
 // =====================================================================
 
 /**
