@@ -148,6 +148,19 @@ export function init() {
     default: false,
   });
 
+  // ---- combat-hud-enabled -------------------------------------------------
+  // Client-scoped: only the Table client wants the player-facing combat HUD
+  // (current + next combatant + round). Default off so a baseline table sees
+  // no extra overlay. Read at render time so the toggle takes effect live.
+  game.settings.register(MODULE_ID, "combat-hud-enabled", {
+    name: "COMMUNITY_SCREEN.settings.combat-hud-enabled.name",
+    hint: "COMMUNITY_SCREEN.settings.combat-hud-enabled.hint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: false,
+  });
+
   // ---- highlight-style ----------------------------------------------------
   // Visual variant for the active-turn highlight. All four styles are
   // rendered natively in PIXI v7; no external module dependencies.

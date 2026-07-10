@@ -44,6 +44,7 @@ import * as pushButtons from "./push-buttons.mjs";
 import * as keybindings from "./keybindings.mjs";
 import * as sceneFollow from "./scene-follow.mjs";
 import * as combatHighlight from "./combat-highlight.mjs";
+import * as combatHud from "./combat-hud.mjs";
 import * as controlPalette from "./control-palette.mjs";
 
 // Helpers used only inside the lifecycle hook bodies below.
@@ -76,6 +77,8 @@ Hooks.once("init", () => {
   sceneFollow.init();
   // Active-turn highlight PIXI overlay.
   combatHighlight.init();
+  // Player-facing combat HUD overlay (Table client, opt-in).
+  combatHud.init();
   // GM control palette (ApplicationV2 window).
   controlPalette.init();
 });

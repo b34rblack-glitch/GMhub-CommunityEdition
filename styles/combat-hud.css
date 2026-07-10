@@ -1,0 +1,84 @@
+/* ==========================================================================
+ * styles/combat-hud.css
+ * --------------------------------------------------------------------------
+ * Player-facing combat HUD — a chrome-free, text-only overlay pinned
+ * top-center on the Table client. Reuses the active-turn highlight palette
+ * (#ffd24a gold / #c94c4c hostile-red / #88aabb cool-gray). Sits above the
+ * canvas and static chrome (z-index 90) but below active dialogs. Custom
+ * id/class, so `body.community-screen-hidden` never touches it.
+ * ========================================================================== */
+
+#community-screen-combat-hud {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+
+  margin: 0;
+  padding: 0.4rem 1.1rem 0.5rem;
+
+  font-family: var(--font-primary, "Signika", sans-serif);
+  color: #f0f0f0;
+
+  background: rgba(12, 12, 16, 0.82);
+  border: 1px solid rgba(255, 210, 74, 0.5);
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Round badge — the gold "R#" chip on the left. */
+#community-screen-combat-hud .community-screen-combat-hud-round {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  color: #ffd24a;
+  padding-right: 0.9rem;
+  border-right: 1px solid rgba(136, 170, 187, 0.35);
+}
+
+/* A slot = caption + name (+ optional initiative). */
+#community-screen-combat-hud .community-screen-combat-hud-slot {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  line-height: 1.2;
+}
+
+#community-screen-combat-hud .community-screen-combat-hud-cap {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #88aabb;
+}
+
+#community-screen-combat-hud .community-screen-combat-hud-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #f0f0f0;
+}
+
+/* The "current" slot gets the gold accent; "next" stays muted. */
+#community-screen-combat-hud
+  .community-screen-combat-hud-current
+  .community-screen-combat-hud-name {
+  color: #ffd24a;
+}
+
+#community-screen-combat-hud .community-screen-combat-hud-next .community-screen-combat-hud-name {
+  color: #c8c8c8;
+}
+
+/* Initiative pip — small, cool-gray, monospace-ish. */
+#community-screen-combat-hud .community-screen-combat-hud-init {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: #88aabb;
+}

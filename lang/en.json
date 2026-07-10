@@ -56,6 +56,10 @@
         "name": "Color Highlight by Disposition",
         "hint": "Friendly/neutral/hostile use different ring colors. Disable for a single neutral color."
       },
+      "combat-hud-enabled": {
+        "name": "Show Combat HUD",
+        "hint": "Show a text-only overlay on this client with the current and next combatant and the round number during combat. Hidden combatants are shown as '?' — to keep an NPC off the display, mark the combatant or its token hidden."
+      },
       "table-mode": {
         "name": "Table Mode",
         "hint": "play = UI hidden + canvas locked. setup = UI visible + canvas pannable.",
@@ -98,6 +102,11 @@
       "fieldset": "Community Screen",
       "fit-mode-label": "Fit mode for the Table",
       "fit-mode-default": "Use world default"
+    },
+    "combat-hud": {
+      "round": "R{round}",
+      "current": "Now",
+      "next": "Next"
     },
     "control-palette": {
       "title": "Community Screen",
