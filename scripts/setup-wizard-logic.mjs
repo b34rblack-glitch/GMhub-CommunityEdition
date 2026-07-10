@@ -205,3 +205,19 @@ export function classifySetting(key) {
   }
   return null;
 }
+
+/**
+ * Pure predicate for the ONE-TIME auto-open (spec KD3). The wizard auto-opens
+ * only on a GM client, only when no Table user is configured yet, and only
+ * while the hidden `setup-complete` flag is unset. Any other combination — a
+ * non-GM/Table client, an already-configured Table user, or a set flag — must
+ * NOT auto-open (the palette "Run setup" button bypasses this and always opens).
+ *
+ * @param {{ isGM?: boolean, tableUserSetting?: string, setupComplete?: boolean }} [state]
+ *   `tableUserSetting` is the RAW `table-user-id` value ("" when unconfigured);
+ *   `setupComplete` is the hidden flag.
+ * @returns {boolean} True iff the wizard should auto-open.
+ */
+export function shouldAutoOpen(state = {}) {
+  return state.isGM === true && state.tableUserSetting === "" && state.setupComplete !== true;
+}

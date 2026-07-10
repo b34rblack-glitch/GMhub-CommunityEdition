@@ -173,6 +173,14 @@
   <section class="community-screen-setup-wizard-step">
     <h2 class="community-screen-setup-wizard-step-title">{{labels.connectivityTitle}}</h2>
     <p class="community-screen-setup-wizard-lede">{{labels.connectivityBody}}</p>
+    <p class="community-screen-setup-wizard-connectivity {{#if connectivityPending}}is-pending{{else}}{{#if connectivityOnline}}is-online{{else}}is-offline{{/if}}{{/if}}">
+      {{#if connectivityPending}}
+      <i class="fa-solid fa-circle-plus"></i>
+      {{else}}
+      <i class="fa-solid {{#if connectivityOnline}}fa-circle-check{{else}}fa-circle-xmark{{/if}}"></i>
+      {{/if}}
+      <span>{{connectivityStatusText}}</span>
+    </p>
   </section>
   {{/if}}
 </div>

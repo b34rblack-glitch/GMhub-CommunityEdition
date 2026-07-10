@@ -251,6 +251,30 @@
   opacity: 0.85;
 }
 
+/* Connectivity step: report-only Table online/offline/pending indicator. */
+.community-screen-setup-wizard-connectivity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  line-height: 1.4;
+}
+
+.community-screen-setup-wizard-connectivity.is-online {
+  color: #4caf50;
+}
+
+.community-screen-setup-wizard-connectivity.is-offline {
+  color: #d0a050;
+}
+
+.community-screen-setup-wizard-connectivity.is-pending {
+  opacity: 0.85;
+}
+
 /* Instruction/warning line shown when a dependency is missing. */
 .community-screen-setup-wizard-warn {
   margin: 0.25rem 0 0;

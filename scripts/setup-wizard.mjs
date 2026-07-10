@@ -25,8 +25,9 @@
 // ============================================================================
 
 import { MODULE_ID } from "./module.mjs";
-import { isGM, getTableUser } from "./identity.mjs";
+import { isGM, getTableUser, getTableUserSetting } from "./identity.mjs";
 import { set as setSetting, get as getSetting } from "./settings.mjs";
+import { syncAll } from "./ownership.mjs";
 import { t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
 import {
@@ -39,8 +40,10 @@ import {
   canFinish,
   selectableUsers,
   findReusableTableUser,
+  DEFAULT_TABLE_USER_NAME,
   FIT_MODES,
   SETTINGS_BUCKETS,
+  shouldAutoOpen,
 } from "./setup-wizard-logic.mjs";
 
 /**
@@ -210,6 +213,33 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
   }
 
   /**
+   * Resolve what the connectivity step reports — mirroring what Finish will
+   * actually do. In `select` mode it live-checks the chosen user. In `create`
+   * mode it mirrors the Finish duplicate-guard: if a reusable "Table" already
+   * exists, report that user's live state; otherwise the user does not exist
+   * yet, so report `pending` (Finish will create it). Report-only — never gates
+   * Finish.
+   *
+   * @returns {{ pending: boolean, online: boolean, name: string }}
+   */
+  _connectivityState() {
+    const data = this.data ?? {};
+    const mode = data.tableUserMode ?? "create";
+    if (mode === "select") {
+      const u = game.users?.get?.(data.tableUserId);
+      return { pending: false, online: u?.active === true, name: u?.name ?? "" };
+    }
+    // create mode — Finish reuses an existing non-GM "Table" rather than
+    // making a duplicate, so connectivity reflects that same resolution.
+    const reusable = findReusableTableUser(this._allUsers());
+    if (reusable) {
+      const u = game.users?.get?.(reusable.id);
+      return { pending: false, online: u?.active === true, name: reusable.name };
+    }
+    return { pending: true, online: false, name: DEFAULT_TABLE_USER_NAME };
+  }
+
+  /**
    * AppV2 first-render hook. `open()` calls `reset()` before rendering, so
    * this is a defensive fallback for a bare `render()` with no prior reset.
    *
@@ -284,6 +314,14 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
       name: t(`settings.${k}.name`),
       hint: t(`settings.${k}.hint`),
     }));
+
+    // Connectivity step: report-only online/offline (or pending-create) state.
+    const conn = this._connectivityState();
+    const connectivityStatusText = conn.pending
+      ? t("setup-wizard.connectivity.pending", { name: conn.name })
+      : conn.online
+        ? t("setup-wizard.connectivity.status-online", { name: conn.name })
+        : t("setup-wizard.connectivity.status-offline", { name: conn.name });
     return {
       step,
       stepKey: key,
@@ -319,6 +357,10 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
       physicalSettings,
       clientSettings,
       describedSettings,
+      // Connectivity step: report-only state (pending-create vs online/offline).
+      connectivityPending: conn.pending,
+      connectivityOnline: conn.online,
+      connectivityStatusText,
       // Dependency-step status: per-module rows + whether all are active.
       depsOk: deps.ok,
       dependencies: deps.modules.map((m) => ({
@@ -547,12 +589,78 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
   }
 
   /**
-   * Perform the Finish commit and close. Placeholder that just closes until the
-   * connectivity/Finish step fills in the ordered commit.
+   * Resolve the Table user's id for Finish, mirroring `_connectivityState`:
+   *   - `select` mode → the captured `tableUserId`.
+   *   - `create` mode → reuse an existing non-GM "Table" (duplicate guard) if
+   *     one exists, otherwise `User.create` a fresh player-role "Table".
+   * May throw if `User.create` is rejected server-side (e.g. an assistant GM);
+   * the caller handles that.
+   *
+   * @returns {Promise<string>} The resolved user id ("" if none could be resolved).
+   */
+  async _resolveTableUserId() {
+    const data = this.data ?? {};
+    const mode = data.tableUserMode ?? "create";
+    if (mode === "select") {
+      return data.tableUserId ?? "";
+    }
+    // create mode — reuse before creating so a second, name-ambiguous "Table"
+    // is never made (Wave 2 M4).
+    const reusable = findReusableTableUser(this._allUsers());
+    if (reusable) return reusable.id;
+    // Minimal creation: default name, player role, no forced password/avatar.
+    const UserClass = globalThis.getDocumentClass?.("User") ?? globalThis.User;
+    const role = globalThis.CONST?.USER_ROLES?.PLAYER ?? 1;
+    const created = await UserClass.create({ name: DEFAULT_TABLE_USER_NAME, role });
+    return created?.id ?? "";
+  }
+
+  /**
+   * Perform the ordered Finish commit and close (spec KD8). Order matters:
+   *   (a) resolve/commit the Table-user decision → persist `table-user-id`;
+   *   (b) persist each editable Bucket-A setting;
+   *   (c) `ownership.syncAll()` (now reads the fresh `table-user-id` +
+   *       `auto-grant-ownership`);
+   *   (d) set the hidden `setup-complete` flag;
+   *   (e) close.
+   * On a `User.create` failure the wizard notifies, leaves `setup-complete`
+   * unset, and stays OPEN so the GM can retry (spec KD4).
    *
    * @returns {Promise<void>}
    */
   async _commitAndClose() {
+    const data = this.data ?? {};
+    // (a) Resolve the Table user (may create). Failure aborts without closing.
+    let tableUserId;
+    try {
+      tableUserId = await this._resolveTableUserId();
+    } catch (err) {
+      logger.error("Setup wizard: failed to create the Table user:", err);
+      ui.notifications?.error(t("setup-wizard.finish.create-failed"));
+      return;
+    }
+    if (!tableUserId) {
+      // Nothing resolved (e.g. select mode with no candidate). Keep the wizard
+      // open and the flag unset so auto-open re-fires next load.
+      ui.notifications?.warn(t("setup-wizard.finish.no-user"));
+      return;
+    }
+    await setSetting("table-user-id", tableUserId);
+    // (b) Persist the editable Bucket-A settings.
+    await setSetting("fit-mode", data.fitMode ?? getSetting("fit-mode", "contain"));
+    await setSetting("popup-backdrop", data.popupBackdrop === true);
+    await setSetting("auto-grant-ownership", data.autoGrantOwnership === true);
+    // (c) Grant the Table user OWNER on PCs now that the id is persisted.
+    //     GM-guarded + idempotent, and a no-op when auto-grant-ownership is off.
+    try {
+      await syncAll();
+    } catch (err) {
+      logger.warn("Setup wizard: ownership.syncAll failed:", err);
+    }
+    // (d) Suppress the one-time auto-open now that setup is complete.
+    await setSetting("setup-complete", true);
+    // (e) Done.
+    ui.notifications?.info(t("setup-wizard.finish.done"));
     await this.close();
   }
 }
@@ -576,13 +684,18 @@ export function open() {
 }
 
 /**
- * Register wizard hooks and the console-callable opener. Live-refresh on
- * `userConnected` and the one-time auto-open are added in the connectivity /
- * Finish step.
+ * Register wizard hooks and the console-callable opener.
  *
  * @returns {void}
  */
 export function init() {
+  // Live-refresh the connectivity indicator when any user connects/disconnects.
+  // ONE module-level guarded listener (like control-palette.mjs) — registering
+  // it per-render (_onRender) would leak one registration on every Next/Back.
+  Hooks.on("userConnected", () => {
+    if (wizard?.rendered) wizard.render(false);
+  });
+
   // Expose a console-callable opener, MERGING into the existing module api so
   // we don't clobber openPalette/pushDocument/etc:
   //   game.modules.get("community-screen").api.openWizard()
@@ -593,5 +706,18 @@ export function init() {
       mod.api.openWizard = () => open();
     }
     logger.debug("Setup wizard initialized.");
+
+    // One-time auto-open on first run: GM client only, no Table user configured
+    // yet, and the hidden flag unset. The palette "Run setup" button bypasses
+    // this gate entirely, so a GM can always reopen the wizard afterward.
+    if (
+      shouldAutoOpen({
+        isGM: isGM(),
+        tableUserSetting: getTableUserSetting(),
+        setupComplete: getSetting("setup-complete", false),
+      })
+    ) {
+      open();
+    }
   });
 }

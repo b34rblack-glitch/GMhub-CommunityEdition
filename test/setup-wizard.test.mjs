@@ -39,6 +39,7 @@ import {
   FIT_MODES,
   SETTINGS_BUCKETS,
   classifySetting,
+  shouldAutoOpen,
 } from "../scripts/setup-wizard-logic.mjs";
 
 test("step model: canonical order + indices", () => {
@@ -211,4 +212,32 @@ test("aware-and-adjust: every config:true setting is surfaced (not null, not hid
     assert.ok(bucket !== null, `"${k}" is unaccounted for (classifies to null)`);
     assert.notEqual(bucket, "hidden", `"${k}" is config:true but classified hidden`);
   }
+});
+
+test("shouldAutoOpen: only GM + no Table user + flag unset auto-opens", () => {
+  // The one case that auto-opens.
+  assert.equal(
+    shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: false }),
+    true,
+  );
+  // An unset (undefined) flag is still "not complete" → auto-opens.
+  assert.equal(shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: undefined }), true);
+  // Non-GM / Table client never auto-opens.
+  assert.equal(
+    shouldAutoOpen({ isGM: false, tableUserSetting: "", setupComplete: false }),
+    false,
+  );
+  // A Table user is already configured → don't auto-open.
+  assert.equal(
+    shouldAutoOpen({ isGM: true, tableUserSetting: "someUserId", setupComplete: false }),
+    false,
+  );
+  // Flag set (finished or dismissed) → don't auto-open.
+  assert.equal(
+    shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: true }),
+    false,
+  );
+  // Defaults / no arg → false (never auto-open on missing state).
+  assert.equal(shouldAutoOpen(), false);
+  assert.equal(shouldAutoOpen({}), false);
 });
