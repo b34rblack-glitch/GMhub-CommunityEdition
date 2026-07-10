@@ -108,3 +108,51 @@
 .community-screen-setup-wizard-primary {
   font-weight: 600;
 }
+
+/* Dependency status list on the dependency step. */
+.community-screen-setup-wizard-deps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.community-screen-setup-wizard-dep {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.community-screen-setup-wizard-dep-name {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+}
+
+.community-screen-setup-wizard-dep-status {
+  margin-left: auto;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.community-screen-setup-wizard-dep.is-active {
+  color: #4caf50;
+}
+
+.community-screen-setup-wizard-dep.is-inactive {
+  color: #d05050;
+}
+
+/* Instruction/warning line shown when a dependency is missing. */
+.community-screen-setup-wizard-warn {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  background: rgba(208, 80, 80, 0.12);
+  color: #d05050;
+  line-height: 1.4;
+}

@@ -25,6 +25,18 @@
   <section class="community-screen-setup-wizard-step">
     <h2 class="community-screen-setup-wizard-step-title">{{labels.dependenciesTitle}}</h2>
     <p class="community-screen-setup-wizard-lede">{{labels.dependenciesBody}}</p>
+    <ul class="community-screen-setup-wizard-deps">
+      {{#each dependencies}}
+      <li class="community-screen-setup-wizard-dep {{#if this.active}}is-active{{else}}is-inactive{{/if}}">
+        <i class="fa-solid {{#if this.active}}fa-circle-check{{else}}fa-circle-xmark{{/if}}"></i>
+        <span class="community-screen-setup-wizard-dep-name">{{this.id}}</span>
+        <span class="community-screen-setup-wizard-dep-status">{{this.statusText}}</span>
+      </li>
+      {{/each}}
+    </ul>
+    {{#unless depsOk}}
+    <p class="community-screen-setup-wizard-warn">{{labels.dependenciesInstruction}}</p>
+    {{/unless}}
   </section>
   {{/if}}
 

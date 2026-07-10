@@ -145,7 +145,11 @@
       },
       "dependencies": {
         "title": "Required modules",
-        "body": "Community Screen needs the socketlib and lib-wrapper modules active to talk to the Table client and manage the canvas."
+        "body": "Community Screen needs the socketlib and lib-wrapper modules active to talk to the Table client and manage the canvas.",
+        "active": "Active",
+        "inactive": "Not active",
+        "instruction": "Enable the modules above in Manage Modules and reload the world, then continue.",
+        "blocked": "Enable socketlib and lib-wrapper (and reload the world) before continuing."
       },
       "table-user": {
         "title": "Table user",

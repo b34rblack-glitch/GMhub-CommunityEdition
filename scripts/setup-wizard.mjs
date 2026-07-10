@@ -29,7 +29,15 @@ import { isGM } from "./identity.mjs";
 import { set as setSetting } from "./settings.mjs";
 import { t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
-import { STEPS, LAST_STEP, clampStep } from "./setup-wizard-logic.mjs";
+import {
+  STEPS,
+  LAST_STEP,
+  REQUIRED_MODULES,
+  clampStep,
+  evaluateDependencies,
+  canAdvance,
+  canFinish,
+} from "./setup-wizard-logic.mjs";
 
 /**
  * The singleton wizard instance. Kept around so re-opening just re-renders
@@ -112,6 +120,21 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
   }
 
   /**
+   * Read the live active-state of the required modules and reduce it through
+   * the pure `evaluateDependencies`. `.active` is the only real signal —
+   * presence in `game.modules` means *installed*, not *active*.
+   *
+   * @returns {{ ok: boolean, modules: Array<{ id: string, active: boolean }> }}
+   */
+  _dependencyState() {
+    const activeById = {};
+    for (const id of REQUIRED_MODULES) {
+      activeById[id] = game.modules?.get?.(id)?.active === true;
+    }
+    return evaluateDependencies(activeById);
+  }
+
+  /**
    * AppV2 first-render hook. `open()` calls `reset()` before rendering, so
    * this is a defensive fallback for a bare `render()` with no prior reset.
    *
@@ -138,6 +161,8 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
     const key = STEPS[step];
     const data = this.data ?? {};
     const mode = data.tableUserMode ?? "create";
+    // Live dependency status for the dependency step + the advance/Finish gate.
+    const deps = this._dependencyState();
     return {
       step,
       stepKey: key,
@@ -154,6 +179,15 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
       data,
       tableUserModeCreate: mode === "create",
       tableUserModeSelect: mode === "select",
+      // Dependency-step status: per-module rows + whether all are active.
+      depsOk: deps.ok,
+      dependencies: deps.modules.map((m) => ({
+        id: m.id,
+        active: m.active,
+        statusText: m.active
+          ? t("setup-wizard.dependencies.active")
+          : t("setup-wizard.dependencies.inactive"),
+      })),
       // All copy pre-localized.
       labels: {
         progress: t("setup-wizard.progress", {
@@ -168,6 +202,7 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
         welcomeBody: t("setup-wizard.welcome.body"),
         dependenciesTitle: t("setup-wizard.dependencies.title"),
         dependenciesBody: t("setup-wizard.dependencies.body"),
+        dependenciesInstruction: t("setup-wizard.dependencies.instruction"),
         tableUserTitle: t("setup-wizard.table-user.title"),
         tableUserBody: t("setup-wizard.table-user.body"),
         modeCreate: t("setup-wizard.table-user.mode-create"),
@@ -225,6 +260,13 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
    * @returns {Promise<void>}
    */
   static async _onNext(_event) {
+    // Consult the pure gate: the dependency step blocks forward navigation
+    // until both required modules are active.
+    const state = { depsOk: this._dependencyState().ok };
+    if (!canAdvance(this.step, state)) {
+      ui.notifications?.warn(t("setup-wizard.dependencies.blocked"));
+      return;
+    }
     this.step = clampStep(this.step + 1);
     await this.render();
   }
@@ -251,6 +293,11 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
    * @returns {Promise<void>}
    */
   static async _onFinish(_event) {
+    // Belt-and-suspenders: refuse Finish if a required module is inactive.
+    if (!canFinish({ depsOk: this._dependencyState().ok })) {
+      ui.notifications?.warn(t("setup-wizard.dependencies.blocked"));
+      return;
+    }
     await this._commitAndClose();
   }
 
