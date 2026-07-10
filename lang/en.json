@@ -15,11 +15,30 @@
         "cover": "Cover (crop)",
         "width": "Fit width",
         "height": "Fit height",
-        "native": "Native (1:1)"
+        "native": "Native (1:1)",
+        "physical": "Physical mini (fixed grid size)"
       },
       "custom-scale": {
-        "name": "Custom Scale Override",
-        "hint": "Force this zoom level instead of computing one. 1.0 = native. Set 0 to disable."
+        "name": "Physical grid-square size",
+        "hint": "For the 'Physical mini' fit mode: the real-world size one grid square should render at on the Table display, in the unit chosen below. E.g. 1 inch for standard 25mm minis. Requires the display diagonal set too."
+      },
+      "physical-target-unit": {
+        "name": "Physical size unit",
+        "hint": "Unit for the physical grid-square size above.",
+        "inch": "Inches",
+        "cm": "Centimeters"
+      },
+      "display-diagonal-in": {
+        "name": "Table display diagonal (inches)",
+        "hint": "The physical diagonal of the Table TV in inches (e.g. 55 for a 55\" TV). Used with the native resolution to compute pixels-per-inch for the 'Physical mini' fit mode."
+      },
+      "display-res-width": {
+        "name": "Table display width (pixels)",
+        "hint": "The Table display's native horizontal resolution in pixels. Leave 0 to auto-detect on the Table client itself (recommended — a value entered on the GM laptop would describe the wrong screen)."
+      },
+      "display-res-height": {
+        "name": "Table display height (pixels)",
+        "hint": "The Table display's native vertical resolution in pixels. Leave 0 to auto-detect on the Table client itself (recommended — a value entered on the GM laptop would describe the wrong screen)."
       },
       "highlight-enabled": {
         "name": "Show Active-Turn Highlight",
@@ -88,7 +107,9 @@
     },
     "notifications": {
       "pushed": "Pushed to Table.",
-      "closed-all": "Closed all Table pop-ups."
+      "closed-all": "Closed all Table pop-ups.",
+      "physical-fit-failed": "Physical fit failed — check the display diagonal, resolution, and grid-square size settings.",
+      "physical-fit-clamped": "Physical fit scale is below Foundry's minimum zoom and may be clamped; minis could render slightly large."
     },
     "errors": {
       "table-offline": "Table client is not connected.",

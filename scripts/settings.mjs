@@ -64,11 +64,15 @@ export function init() {
       height: "COMMUNITY_SCREEN.settings.fit-mode.height",
       // Pixel-for-pixel, no scaling.
       native: "COMMUNITY_SCREEN.settings.fit-mode.native",
+      // Physical-mini: one grid square = a fixed real-world size on the TV.
+      physical: "COMMUNITY_SCREEN.settings.fit-mode.physical",
     },
   });
 
   // ---- custom-scale -------------------------------------------------------
-  // Reserved for physical-mini mode (v0.3 roadmap). Currently informational.
+  // Physical-mini target: the real-world size ONE grid square should render
+  // at on the Table display, in the unit chosen by `physical-target-unit`.
+  // Only consulted when the fit mode is "physical".
   game.settings.register(MODULE_ID, "custom-scale", {
     name: "COMMUNITY_SCREEN.settings.custom-scale.name",
     hint: "COMMUNITY_SCREEN.settings.custom-scale.hint",
@@ -76,8 +80,60 @@ export function init() {
     config: true,
     type: Number,
     default: 1.0,
-    // Slider range constraint shown in the settings UI.
-    range: { min: 0, max: 4, step: 0.05 },
+    // A grid square between 0.1 and 20 (inches or cm) covers 25mm/1" minis
+    // through oversized cm grids. Must be > 0 (guarded again in computeFit).
+    range: { min: 0.1, max: 20, step: 0.1 },
+  });
+
+  // ---- physical-target-unit ----------------------------------------------
+  // Unit for the `custom-scale` physical target size (cm or inch).
+  game.settings.register(MODULE_ID, "physical-target-unit", {
+    name: "COMMUNITY_SCREEN.settings.physical-target-unit.name",
+    hint: "COMMUNITY_SCREEN.settings.physical-target-unit.hint",
+    scope: "world",
+    config: true,
+    type: String,
+    default: "inch",
+    choices: {
+      inch: "COMMUNITY_SCREEN.settings.physical-target-unit.inch",
+      cm: "COMMUNITY_SCREEN.settings.physical-target-unit.cm",
+    },
+  });
+
+  // ---- display-diagonal-in ------------------------------------------------
+  // The Table display's physical diagonal in inches (e.g. 55 for a 55" TV).
+  // Together with the native resolution this derives pixels-per-inch. Default
+  // 0 is intentionally invalid so physical mode warns until it's configured.
+  game.settings.register(MODULE_ID, "display-diagonal-in", {
+    name: "COMMUNITY_SCREEN.settings.display-diagonal-in.name",
+    hint: "COMMUNITY_SCREEN.settings.display-diagonal-in.hint",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 0,
+    range: { min: 0, max: 120, step: 0.5 },
+  });
+
+  // ---- display-res-width / display-res-height -----------------------------
+  // The Table display's NATIVE resolution in device pixels. Sentinel 0 =
+  // auto-detect at fit time on the Table client (screen dimensions × renderer
+  // resolution) — NOT prefilled from the GM form, which would capture the GM
+  // laptop's screen instead of the TV.
+  game.settings.register(MODULE_ID, "display-res-width", {
+    name: "COMMUNITY_SCREEN.settings.display-res-width.name",
+    hint: "COMMUNITY_SCREEN.settings.display-res-width.hint",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 0,
+  });
+  game.settings.register(MODULE_ID, "display-res-height", {
+    name: "COMMUNITY_SCREEN.settings.display-res-height.name",
+    hint: "COMMUNITY_SCREEN.settings.display-res-height.hint",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 0,
   });
 
   // ---- highlight-enabled --------------------------------------------------
