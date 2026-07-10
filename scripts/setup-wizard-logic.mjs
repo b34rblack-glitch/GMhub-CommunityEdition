@@ -142,3 +142,66 @@ export function findReusableTableUser(users = [], name = DEFAULT_TABLE_USER_NAME
   const match = users.find((u) => u && !u.isGM && u.name === name);
   return match ? { id: match.id, name: match.name } : null;
 }
+
+/**
+ * The `fit-mode` choices, in the settings.mjs registration order. Drives the
+ * wizard's fit-mode <select> so it stays in sync with the real choices; each
+ * value maps to the localized label `settings.fit-mode.<value>`.
+ *
+ * @type {ReadonlyArray<string>}
+ */
+export const FIT_MODES = Object.freeze([
+  "contain",
+  "cover",
+  "width",
+  "height",
+  "native",
+  "physical",
+]);
+
+/**
+ * The AWARE-AND-ADJUST settings walk-through taxonomy (spec KD7). Every module
+ * setting is bucketed so the wizard can render the right treatment and so a test
+ * can assert exhaustiveness — no `config:true` setting is silently dropped.
+ *
+ *  - `editable`     Bucket A: editable controls, committed on Finish.
+ *  - `physical`     Bucket B: physical-mini, described-with-current-value,
+ *                   revealed only when `fit-mode = physical`.
+ *  - `clientInfo`   Bucket D: client-scoped, INFORMATIONAL ONLY — never written
+ *                   (a GM-laptop write lands in the GM's localStorage, not the
+ *                   Table TV's — spec C7).
+ *  - `described`    Bucket C: other world settings, described-with-current-value.
+ *  - `resolution`   Interview-excluded: auto-detects on the Table (info line only).
+ *  - `handledElsewhere` Surfaced in the Table-user step / Finish, not here.
+ *  - `hidden`       `config:false` — never surfaced anywhere.
+ *
+ * @type {Readonly<Record<string, ReadonlyArray<string>>>}
+ */
+export const SETTINGS_BUCKETS = Object.freeze({
+  editable: Object.freeze(["fit-mode", "popup-backdrop", "auto-grant-ownership"]),
+  physical: Object.freeze(["custom-scale", "physical-target-unit", "display-diagonal-in"]),
+  clientInfo: Object.freeze(["highlight-enabled", "combat-hud-enabled"]),
+  described: Object.freeze([
+    "highlight-style",
+    "highlight-use-disposition",
+    "suppress-table-chat",
+    "spotlight-enabled",
+  ]),
+  resolution: Object.freeze(["display-res-width", "display-res-height"]),
+  handledElsewhere: Object.freeze(["table-user-id"]),
+  hidden: Object.freeze(["table-mode", "setup-complete"]),
+});
+
+/**
+ * Pure classifier: which walk-through bucket a setting key belongs to.
+ *
+ * @param {string} key - A module setting key (kebab-case).
+ * @returns {string | null} The bucket name from `SETTINGS_BUCKETS`, or `null`
+ *   for an unknown key.
+ */
+export function classifySetting(key) {
+  for (const [bucket, keys] of Object.entries(SETTINGS_BUCKETS)) {
+    if (keys.includes(key)) return bucket;
+  }
+  return null;
+}

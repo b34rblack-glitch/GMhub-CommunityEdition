@@ -164,7 +164,15 @@
       },
       "settings": {
         "title": "Recommended defaults",
-        "body": "Review the module's defaults. Everything here has a sensible starting value; adjust anything you like now or later in the module settings."
+        "body": "Review the module's defaults. Everything here has a sensible starting value; adjust anything you like now or later in the module settings.",
+        "editable-title": "Adjust now",
+        "physical-title": "Physical-mini scale",
+        "physical-res-info": "The Table display's native resolution auto-detects on the Table client, so there's nothing to set here.",
+        "client-title": "Set on the Table client",
+        "client-note": "These are per-display toggles — turn them on from the Table client itself (this GM screen can't set them for the TV).",
+        "described-title": "Good to know",
+        "value-on": "On",
+        "value-off": "Off"
       },
       "connectivity": {
         "title": "Connect the Table",

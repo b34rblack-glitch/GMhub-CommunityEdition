@@ -26,7 +26,7 @@
 
 import { MODULE_ID } from "./module.mjs";
 import { isGM, getTableUser } from "./identity.mjs";
-import { set as setSetting } from "./settings.mjs";
+import { set as setSetting, get as getSetting } from "./settings.mjs";
 import { t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
 import {
@@ -39,6 +39,8 @@ import {
   canFinish,
   selectableUsers,
   findReusableTableUser,
+  FIT_MODES,
+  SETTINGS_BUCKETS,
 } from "./setup-wizard-logic.mjs";
 
 /**
@@ -123,10 +125,59 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
     // re-running the wizard shows the existing choice rather than defaulting to
     // "create". Falls back to "create" on a fresh world.
     const current = getTableUser();
-    if (current?.id) {
-      return { tableUserMode: "select", tableUserId: current.id };
+    const tableUser = current?.id
+      ? { tableUserMode: "select", tableUserId: current.id }
+      : { tableUserMode: "create" };
+    // Bucket-A editable settings, pre-filled from the CURRENT values so the
+    // controls open at the live state. The form handler overwrites these as the
+    // GM edits; Finish persists whatever ends up here. Seeding them up front
+    // means Finish commits the right values even if the GM never touches them.
+    return {
+      ...tableUser,
+      fitMode: getSetting("fit-mode", "contain"),
+      popupBackdrop: getSetting("popup-backdrop", true) === true,
+      autoGrantOwnership: getSetting("auto-grant-ownership", true) === true,
+    };
+  }
+
+  /**
+   * Format a setting's CURRENT value for the read-only "described-with-current-
+   * value" rows. Booleans → localized On/Off; choice settings → the localized
+   * choice label; everything else → its string form.
+   *
+   * @param {string} key - Setting key.
+   * @param {"boolean" | "choice" | "raw"} kind - How to render the value.
+   * @returns {string} A localized, display-ready value string.
+   */
+  _describedValue(key, kind) {
+    const value = getSetting(key);
+    if (kind === "boolean") {
+      return value === true
+        ? t("setup-wizard.settings.value-on")
+        : t("setup-wizard.settings.value-off");
     }
-    return { tableUserMode: "create" };
+    if (kind === "choice") {
+      // Choice values are themselves i18n keys under settings.<key>.<value>.
+      return t(`settings.${key}.${value}`);
+    }
+    return value === undefined || value === null ? "" : String(value);
+  }
+
+  /**
+   * Build one read-only walk-through row: localized name + hint (reusing the
+   * setting's own i18n keys) plus the formatted current value.
+   *
+   * @param {string} key - Setting key.
+   * @param {"boolean" | "choice" | "raw"} kind - Value formatting.
+   * @returns {{ key: string, name: string, hint: string, value: string }}
+   */
+  _describedRow(key, kind) {
+    return {
+      key,
+      name: t(`settings.${key}.name`),
+      hint: t(`settings.${key}.hint`),
+      value: this._describedValue(key, kind),
+    };
   }
 
   /**
@@ -202,6 +253,37 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
     // Offer to reuse an existing "Table" user — unless it is already the one the
     // GM has selected (then the offer would be redundant noise).
     const showReuseOffer = reusable !== null && !(mode === "select" && selectedId === reusable.id);
+
+    // Settings walk-through (aware-and-adjust). Editable core-three come from
+    // `this.data` (seeded from current values, overwritten as the GM edits);
+    // the described/informational buckets read the CURRENT values live.
+    const fitModeValue = data.fitMode ?? getSetting("fit-mode", "contain");
+    const fitModeOptions = FIT_MODES.map((v) => ({
+      value: v,
+      label: t(`settings.fit-mode.${v}`),
+      selected: v === fitModeValue,
+    }));
+    // Per-setting value formatting for the read-only rows.
+    const kinds = {
+      "custom-scale": "raw",
+      "physical-target-unit": "choice",
+      "display-diagonal-in": "raw",
+      "highlight-style": "choice",
+      "highlight-use-disposition": "boolean",
+      "suppress-table-chat": "boolean",
+      "spotlight-enabled": "boolean",
+    };
+    const physicalSettings = SETTINGS_BUCKETS.physical.map((k) => this._describedRow(k, kinds[k]));
+    const describedSettings = SETTINGS_BUCKETS.described.map((k) =>
+      this._describedRow(k, kinds[k]),
+    );
+    // Client-scoped rows are informational only — no current value shown (a
+    // GM-laptop read is not the Table TV's value; the wizard never writes them).
+    const clientSettings = SETTINGS_BUCKETS.clientInfo.map((k) => ({
+      key: k,
+      name: t(`settings.${k}.name`),
+      hint: t(`settings.${k}.hint`),
+    }));
     return {
       step,
       stepKey: key,
@@ -228,6 +310,15 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
       hasUserOptions: options.length > 0,
       reusableTableUser: reusable,
       showReuseOffer,
+      // Settings step: editable core-three (pre-filled) + read-only buckets +
+      // the physical-mini reveal flag.
+      fitModeOptions,
+      isPhysical: fitModeValue === "physical",
+      popupBackdrop: data.popupBackdrop === true,
+      autoGrantOwnership: data.autoGrantOwnership === true,
+      physicalSettings,
+      clientSettings,
+      describedSettings,
       // Dependency-step status: per-module rows + whether all are active.
       depsOk: deps.ok,
       dependencies: deps.modules.map((m) => ({
@@ -265,6 +356,19 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
         tableUserReuseAction: t("setup-wizard.table-user.reuse-action"),
         settingsTitle: t("setup-wizard.settings.title"),
         settingsBody: t("setup-wizard.settings.body"),
+        settingsEditableTitle: t("setup-wizard.settings.editable-title"),
+        settingsPhysicalTitle: t("setup-wizard.settings.physical-title"),
+        settingsPhysicalResInfo: t("setup-wizard.settings.physical-res-info"),
+        settingsClientTitle: t("setup-wizard.settings.client-title"),
+        settingsClientNote: t("setup-wizard.settings.client-note"),
+        settingsDescribedTitle: t("setup-wizard.settings.described-title"),
+        // Editable core-three: reuse each setting's own name/hint i18n keys.
+        fitModeName: t("settings.fit-mode.name"),
+        fitModeHint: t("settings.fit-mode.hint"),
+        popupBackdropName: t("settings.popup-backdrop.name"),
+        popupBackdropHint: t("settings.popup-backdrop.hint"),
+        autoGrantName: t("settings.auto-grant-ownership.name"),
+        autoGrantHint: t("settings.auto-grant-ownership.hint"),
         connectivityTitle: t("setup-wizard.connectivity.title"),
         connectivityBody: t("setup-wizard.connectivity.body"),
       },
@@ -291,6 +395,27 @@ class SetupWizard extends foundry.applications.api.HandlebarsApplicationMixin(
     // Table-user step: toggle the create/select sub-blocks live on the mode
     // radio WITHOUT a full re-render (which would fight the form handler).
     this._bindTableUserReveal();
+    // Settings step: reveal the physical-mini block only for fit-mode=physical.
+    this._bindSettingsReveal();
+  }
+
+  /**
+   * Settings step: reveal the physical-mini block only when `fit-mode` is
+   * `physical`, toggling `.is-hidden` on a `change` listener over the fit-mode
+   * select. Same rationale as `_bindTableUserReveal` — no full re-render, so the
+   * form handler keeps ownership of the captured value. No-op off the settings
+   * step.
+   *
+   * @returns {void}
+   */
+  _bindSettingsReveal() {
+    const root = this.element;
+    const select = root?.querySelector?.('select[name="fitMode"]');
+    const block = root?.querySelector?.("[data-physical-block]");
+    if (!select || !block) return;
+    const apply = () => block.classList.toggle("is-hidden", select.value !== "physical");
+    select.addEventListener("change", apply);
+    apply();
   }
 
   /**

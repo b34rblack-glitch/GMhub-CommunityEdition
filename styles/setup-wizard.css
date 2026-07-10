@@ -206,6 +206,51 @@
   color: #d05050;
 }
 
+/* Settings walk-through: a labelled group of related settings. */
+.community-screen-setup-wizard-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.community-screen-setup-wizard-subhead {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  border: none;
+}
+
+/* A read-only "described-with-current-value" setting row. */
+.community-screen-setup-wizard-described {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.community-screen-setup-wizard-described-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.community-screen-setup-wizard-described-name {
+  font-weight: 600;
+}
+
+.community-screen-setup-wizard-described-value {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
 /* Instruction/warning line shown when a dependency is missing. */
 .community-screen-setup-wizard-warn {
   margin: 0.25rem 0 0;

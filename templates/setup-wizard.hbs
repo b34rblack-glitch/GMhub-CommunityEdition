@@ -93,6 +93,79 @@
   <section class="community-screen-setup-wizard-step">
     <h2 class="community-screen-setup-wizard-step-title">{{labels.settingsTitle}}</h2>
     <p class="community-screen-setup-wizard-lede">{{labels.settingsBody}}</p>
+
+    {{!-- Bucket A: editable core three (committed on Finish). --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsEditableTitle}}</h3>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-field-label" for="community-screen-setup-wizard-fit-mode">{{labels.fitModeName}}</label>
+        <select id="community-screen-setup-wizard-fit-mode" name="fitMode">
+          {{#each fitModeOptions}}
+          <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+        </select>
+        <p class="community-screen-setup-wizard-hint">{{labels.fitModeHint}}</p>
+      </div>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-choice">
+          <input type="checkbox" name="popupBackdrop" {{#if popupBackdrop}}checked{{/if}} />
+          <span>{{labels.popupBackdropName}}</span>
+        </label>
+        <p class="community-screen-setup-wizard-hint">{{labels.popupBackdropHint}}</p>
+      </div>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-choice">
+          <input type="checkbox" name="autoGrantOwnership" {{#if autoGrantOwnership}}checked{{/if}} />
+          <span>{{labels.autoGrantName}}</span>
+        </label>
+        <p class="community-screen-setup-wizard-hint">{{labels.autoGrantHint}}</p>
+      </div>
+    </div>
+
+    {{!-- Bucket B: physical-mini, described-with-current-value, revealed only
+          when fit-mode=physical (toggled live by _bindSettingsReveal). --}}
+    <div class="community-screen-setup-wizard-subgroup community-screen-setup-wizard-physical {{#unless isPhysical}}is-hidden{{/unless}}" data-physical-block>
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsPhysicalTitle}}</h3>
+      {{#each physicalSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <div class="community-screen-setup-wizard-described-head">
+          <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+          <span class="community-screen-setup-wizard-described-value">{{this.value}}</span>
+        </div>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+      <p class="community-screen-setup-wizard-hint">{{labels.settingsPhysicalResInfo}}</p>
+    </div>
+
+    {{!-- Bucket D: client-scoped, informational only — NEVER written. --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsClientTitle}}</h3>
+      {{#each clientSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+      <p class="community-screen-setup-wizard-hint">{{labels.settingsClientNote}}</p>
+    </div>
+
+    {{!-- Bucket C: other world settings, described-with-current-value. --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsDescribedTitle}}</h3>
+      {{#each describedSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <div class="community-screen-setup-wizard-described-head">
+          <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+          <span class="community-screen-setup-wizard-described-value">{{this.value}}</span>
+        </div>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+    </div>
   </section>
   {{/if}}
 

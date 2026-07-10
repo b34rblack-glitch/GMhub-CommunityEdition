@@ -36,6 +36,9 @@ import {
   DEFAULT_TABLE_USER_NAME,
   selectableUsers,
   findReusableTableUser,
+  FIT_MODES,
+  SETTINGS_BUCKETS,
+  classifySetting,
 } from "../scripts/setup-wizard-logic.mjs";
 
 test("step model: canonical order + indices", () => {
@@ -144,4 +147,68 @@ test("findReusableTableUser: finds a non-GM 'Table', ignores GM/other names", ()
     findReusableTableUser([{ id: "p9", name: "TV", isGM: false }], "TV"),
     { id: "p9", name: "TV" },
   );
+});
+
+test("FIT_MODES: canonical fit-mode choices in registration order", () => {
+  assert.deepEqual(
+    [...FIT_MODES],
+    ["contain", "cover", "width", "height", "native", "physical"],
+  );
+});
+
+test("classifySetting: known keys land in the right bucket; unknown → null", () => {
+  assert.equal(classifySetting("fit-mode"), "editable");
+  assert.equal(classifySetting("popup-backdrop"), "editable");
+  assert.equal(classifySetting("auto-grant-ownership"), "editable");
+  assert.equal(classifySetting("custom-scale"), "physical");
+  assert.equal(classifySetting("physical-target-unit"), "physical");
+  assert.equal(classifySetting("display-diagonal-in"), "physical");
+  assert.equal(classifySetting("highlight-enabled"), "clientInfo");
+  assert.equal(classifySetting("combat-hud-enabled"), "clientInfo");
+  assert.equal(classifySetting("highlight-style"), "described");
+  assert.equal(classifySetting("spotlight-enabled"), "described");
+  assert.equal(classifySetting("display-res-width"), "resolution");
+  assert.equal(classifySetting("display-res-height"), "resolution");
+  assert.equal(classifySetting("table-user-id"), "handledElsewhere");
+  assert.equal(classifySetting("table-mode"), "hidden");
+  assert.equal(classifySetting("setup-complete"), "hidden");
+  assert.equal(classifySetting("does-not-exist"), null);
+});
+
+test("SETTINGS_BUCKETS: partition (no key in two buckets)", () => {
+  const seen = new Set();
+  for (const keys of Object.values(SETTINGS_BUCKETS)) {
+    for (const k of keys) {
+      assert.ok(!seen.has(k), `duplicate bucket membership for "${k}"`);
+      seen.add(k);
+    }
+  }
+});
+
+test("aware-and-adjust: every config:true setting is surfaced (not null, not hidden)", () => {
+  // The full config:true set from settings.mjs. Each must classify to a
+  // surfaced or interview-excluded bucket — never `null` (unaccounted) and
+  // never `hidden` (which is reserved for config:false settings).
+  const configTrue = [
+    "table-user-id",
+    "fit-mode",
+    "custom-scale",
+    "physical-target-unit",
+    "display-diagonal-in",
+    "display-res-width",
+    "display-res-height",
+    "highlight-enabled",
+    "combat-hud-enabled",
+    "highlight-style",
+    "highlight-use-disposition",
+    "suppress-table-chat",
+    "auto-grant-ownership",
+    "spotlight-enabled",
+    "popup-backdrop",
+  ];
+  for (const k of configTrue) {
+    const bucket = classifySetting(k);
+    assert.ok(bucket !== null, `"${k}" is unaccounted for (classifies to null)`);
+    assert.notEqual(bucket, "hidden", `"${k}" is config:true but classified hidden`);
+  }
 });
