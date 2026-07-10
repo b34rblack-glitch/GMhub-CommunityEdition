@@ -247,6 +247,20 @@ export function init() {
     default: false,
   });
 
+  // ---- setup-complete -----------------------------------------------------
+  // Hidden from the config UI (`config: false`). World-scoped boolean flag set
+  // true once the first-run setup wizard has been completed OR explicitly
+  // dismissed ("Don't show again"). Gates the wizard's one-time auto-open so it
+  // never re-fires on its own; the palette "Run setup" button ignores it.
+  game.settings.register(MODULE_ID, "setup-complete", {
+    name: "COMMUNITY_SCREEN.settings.setup-complete.name",
+    hint: "COMMUNITY_SCREEN.settings.setup-complete.hint",
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false,
+  });
+
   // ---- popup-backdrop ----------------------------------------------------
   // Toggle the 60%-dark canvas overlay when popups are open on the Table.
   game.settings.register(MODULE_ID, "popup-backdrop", {

@@ -22,6 +22,7 @@ import { executeAsUser } from "./sockets.mjs";
 import { get as getSetting } from "./settings.mjs";
 import { fitSceneToTable } from "./scene-fit.mjs";
 import { setSpotlight, clearSpotlight } from "./vision.mjs";
+import * as setupWizard from "./setup-wizard.mjs";
 import { t } from "./lib/helpers.mjs";
 import { logger } from "./lib/logger.mjs";
 
@@ -73,6 +74,7 @@ class ControlPalette extends foundry.applications.api.HandlebarsApplicationMixin
       "toggle-table-mode": ControlPalette._onToggle,
       spotlight: ControlPalette._onSpotlight,
       "clear-spotlight": ControlPalette._onClearSpotlight,
+      "run-setup": ControlPalette._onRunSetup,
     },
   };
 
@@ -108,6 +110,7 @@ class ControlPalette extends foundry.applications.api.HandlebarsApplicationMixin
         toggleTableMode: t("buttons.toggle-table-mode"),
         spotlight: t("buttons.spotlight"),
         clearSpotlight: t("buttons.clear-spotlight"),
+        runSetup: t("buttons.run-setup"),
       },
     };
   }
@@ -223,6 +226,19 @@ class ControlPalette extends foundry.applications.api.HandlebarsApplicationMixin
     } catch (err) {
       logger.debug("clear spotlight failed:", err);
     }
+  }
+
+  /**
+   * Action handler for "Run setup". Opens the first-run setup wizard. Always
+   * enabled and available — this is precisely the control a GM needs when NO
+   * Table user is configured yet — so it ignores the `setup-complete` flag and
+   * the has-Table-user guard.
+   *
+   * @param {Event} _event
+   * @returns {void}
+   */
+  static _onRunSetup(_event) {
+    setupWizard.open();
   }
 }
 

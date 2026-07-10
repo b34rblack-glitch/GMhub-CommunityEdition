@@ -1,0 +1,15 @@
+{{!--
+  templates/setup-wizard.hbs
+  First-run setup wizard body. Rendered inside the AppV2 form element.
+  All copy is passed pre-localized via _prepareContext (labels.*) — this
+  template carries no literal user-visible strings.
+
+  Scaffold: a localized welcome panel. The linear step flow (step header,
+  per-step content, Back/Next/Finish footer) is layered on in later steps.
+--}}
+<div class="community-screen-setup-wizard-body">
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.welcomeTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.welcomeBody}}</p>
+  </section>
+</div>

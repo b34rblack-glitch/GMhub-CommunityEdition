@@ -46,6 +46,7 @@ import * as sceneFollow from "./scene-follow.mjs";
 import * as combatHighlight from "./combat-highlight.mjs";
 import * as combatHud from "./combat-hud.mjs";
 import * as controlPalette from "./control-palette.mjs";
+import * as setupWizard from "./setup-wizard.mjs";
 
 // Helpers used only inside the lifecycle hook bodies below.
 import { isTableUser } from "./identity.mjs";
@@ -81,6 +82,8 @@ Hooks.once("init", () => {
   combatHud.init();
   // GM control palette (ApplicationV2 window).
   controlPalette.init();
+  // First-run setup wizard (GM-only ApplicationV2 window).
+  setupWizard.init();
 });
 
 // Foundry's `ready` hook: world is fully loaded, all settings/users

@@ -81,6 +81,10 @@
       "spotlight-enabled": {
         "name": "Enable Spotlight Token Control",
         "hint": "Show a GM-only 'Spotlight token' control in the Community Screen palette to force the Table onto a chosen token's vision until cleared. Auto-clears when combat starts or ends."
+      },
+      "setup-complete": {
+        "name": "First-run setup complete",
+        "hint": "Internal flag: set once the first-run setup wizard has been completed or dismissed. Hidden from this list; the wizard reopens from the Community Screen palette's 'Run setup' button."
       }
     },
     "keybindings": {
@@ -99,7 +103,8 @@
       "refit-scene": "Refit Scene",
       "toggle-table-mode": "Toggle Table Mode",
       "spotlight": "Spotlight Token",
-      "clear-spotlight": "Clear Spotlight"
+      "clear-spotlight": "Clear Spotlight",
+      "run-setup": "Run setup"
     },
     "spotlight": {
       "dialog-title": "Spotlight a token on the Table",
@@ -124,6 +129,13 @@
       "table-online": "Table user is online",
       "table-offline": "Table user is offline",
       "no-table-user": "No Table user configured"
+    },
+    "setup-wizard": {
+      "title": "Community Screen setup",
+      "welcome": {
+        "title": "Welcome to Community Screen",
+        "body": "This wizard sets up the shared Table display: it creates or picks the dedicated Table user, points the module at it, walks you through the recommended defaults, and confirms everything is connected before you finish. You can reopen it any time from the 'Run setup' button in the Community Screen palette."
+      }
     },
     "notifications": {
       "pushed": "Pushed to Table.",

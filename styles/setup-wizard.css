@@ -1,0 +1,44 @@
+/* ==========================================================================
+   styles/setup-wizard.css
+   --------------------------------------------------------------------------
+   First-run setup wizard (scripts/setup-wizard.mjs). Scoped under
+   .community-screen-setup-wizard so nothing leaks into Foundry's own chrome.
+
+   The window is a fixed height with a scrollable body region so stepping
+   through steps of different heights does not make the window jitter.
+   ========================================================================== */
+
+/* The AppV2 form fills the window; its body scrolls, its footer stays put. */
+.community-screen-setup-wizard form,
+.community-screen-setup-wizard .window-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Scrollable content region — the per-step body grows/shrinks in here. */
+.community-screen-setup-wizard-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+}
+
+.community-screen-setup-wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.community-screen-setup-wizard-step-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  border: none;
+}
+
+.community-screen-setup-wizard-lede {
+  margin: 0;
+  line-height: 1.5;
+  opacity: 0.9;
+}
