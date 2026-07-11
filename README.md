@@ -1,264 +1,229 @@
 # Community Screen
 
-**Drive the shared TV at your gaming table from the GM laptop.** Community
-Screen is a Foundry VTT v14 module that turns a dedicated player-role user
-named "Table" into a clean, chrome-free display: the GM clicks a button on
-their own machine and a journal, item card, or character portrait appears
-centered on the TV. Vision adapts automatically — out of combat the Table
-shows the union of the party's sight; in combat it follows whichever token
-the combat tracker says is currently up. A glowing ring marks the active combatant. The map
-fits the TV's aspect ratio. The canvas can't be panned or zoomed by a passing
-player elbow, but tokens still drag freely so players can walk up and play.
+**Turn the TV at your gaming table into a live, player-facing game board —
+controlled entirely from the GM's laptop.**
 
-<!-- TODO: add screenshots -->
+Community Screen is a [Foundry VTT](https://foundryvtt.com) module for
+in-person tables that play with a shared screen. Log a dedicated "Table"
+account into the browser on your TV, and Community Screen turns it into a
+clean, clutter-free display: no sidebar, no toolbars, just the map. From your
+own laptop you can push journals, item cards, portraits, and images straight
+to the TV with one click. The view follows the party's eyes — and in combat,
+whoever's turn it is — with a glowing ring marking the active combatant.
+Players can still walk up and drag their own tokens, but a stray elbow can't
+pan or zoom the map.
 
 ## Features
 
-### At the Table
+### A clean display for your players
 
-- **UI-hidden chrome.** Sidebar, hotbar, scene navigation, scene controls,
-  player list, notifications, and chat input all disappear on the Table
-  client. The map fills the screen.
-- **Canvas lock.** Scroll-wheel zoom and click-drag pan are disabled — bumps
-  and elbow nudges don't disturb the view. Tokens still drag for players who
-  walk up.
-- **Aspect-ratio fit.** Each scene auto-fits the TV with five modes
-  (contain / cover / width / height / native), settable as a world default
-  and overridable per scene from Scene Config.
+- **No screen clutter.** Sidebars, toolbars, chat, and notifications are all
+  hidden on the TV. The map fills the screen.
+- **Bump-proof.** Panning and zooming are locked on the TV, so an accidental
+  touch or scroll can't disturb the view — but players can still drag their
+  own tokens.
+- **Fits any TV.** Six fit modes (contain, cover, width, height, native, and
+  physical mini) make sure every scene looks right on your screen, with
+  per-scene overrides available in each scene's settings.
+- **Physical-mini scale.** Playing with real miniatures on top of the TV?
+  The physical fit mode renders each grid square at a real-world size you
+  choose — for example, exactly one inch — so your minis line up with the map.
 
-### GM Controls
+### Share anything with one click
 
-- **Push to Table** button on every Journal, Item, Actor, and Scene sheet,
-  plus a right-click "Push to Table" entry in the directory.
-- **Hotkeys** (GM-only): `Ctrl+Shift+U` toggles Table play/setup mode;
-  `Ctrl+Shift+P` closes every pop-up on the Table.
-- **Control palette** reachable from the scene controls — shows whether the
-  Table is online, with quick buttons for Close All, Refit Scene, and Toggle
-  Table Mode.
+- **Push to Table.** Every journal, item, actor, and scene gets a "Push to
+  Table" button — click it and the content appears centered on the TV. Also
+  available by right-clicking entries in the sidebar directories.
+- **Spotlight on the content.** While something is on screen, the map behind
+  it dims so all eyes go to what you're sharing. One click (or hotkey)
+  clears everything off the TV again.
 
-### Vision
+### The view follows the action
 
-- **Combat-aware focus.** When combat is active, the Table follows the
-  current combatant in the combat tracker — whoever's turn it is. When
-  combat ends, the Table falls back to the union of every actor it has
-  OBSERVER or OWNER on — Foundry's native party-vision behavior. GM
-  selection is intentionally ignored (the GM often selects NPCs, traps,
-  or lights that shouldn't change what the room sees).
-- **Automatic ownership** management: every actor with a non-Table player
-  owner gets the Table user added at OWNER level so players can walk up and
-  drag their own token.
+- **Party vision.** Out of combat, the TV shows what the party can
+  collectively see — no spoilers, no unexplored corners.
+- **Combat focus.** In combat, the view automatically follows whoever's turn
+  it is in the combat tracker, switching as the turn advances.
+- **Active-turn ring.** A glowing, animated ring marks the active combatant.
+  Choose from four styles — subtle, default, dramatic, or ornate — with
+  optional color-coding for friend and foe. No extra modules needed.
+- **Combat HUD.** An optional overlay shows the room whose turn it is, who's
+  up next, and the current round. Combatants you've hidden stay hidden.
+- **Spotlight.** Want to force the TV onto a specific token — dramatic
+  reveal, cutscene, boss entrance? Enable the optional Spotlight control and
+  point the room's eyes wherever you like until you clear it.
 
-### Combat
+### It just stays in sync
 
-- **Active-turn highlight.** A rotating, pulsing ring marks whose turn it
-  is. Four built-in styles (subtle / default / dramatic / ornate),
-  rendered natively via PIXI v7 with no external module dependencies.
-  Disposition coloring (friendly = yellow, hostile = red, neutral =
-  cool gray) optional.
-
-### Ergonomics
-
-- **Scene follow** mirrors GM scene changes to the Table.
-- **Scene Levels follow** (v14 feature) keeps the Table on the same level
-  the GM is viewing, when the API supports it.
-- **Pop-up backdrop**: a 60% dark dim behind open pop-ups so the focus
-  stays on the content. Configurable.
+- **Scene follow.** When you switch scenes, the TV follows automatically —
+  including the map level you're viewing, on games that use scene levels.
+- **Automatic permissions.** The module keeps the Table account's
+  permissions in sync so player characters are always visible and draggable
+  on the TV, without you managing user permissions by hand.
+- **GM control palette.** A small control window on your laptop shows
+  whether the TV is connected and gives you quick buttons: close all
+  pop-ups, refit the scene, toggle setup mode, and re-run the setup wizard.
 
 ## Requirements
 
-- **Foundry VTT v14** (verified). Compatibility minimum is v13.
-- **Required modules** (auto-installed via manifest dependencies):
-  - [socketlib](https://github.com/farling42/foundryvtt-socketlib)
-  - [lib-wrapper](https://github.com/ruipin/fvtt-lib-wrapper)
+- **Foundry VTT v13 or v14** (verified on v14).
+- Two required library modules, **installed automatically** with this one:
+  [socketlib](https://github.com/farling42/foundryvtt-socketlib) and
+  [libWrapper](https://github.com/ruipin/fvtt-lib-wrapper).
 
-That's it. No recommended modules — all visual effects, including the
-active-turn highlight, are rendered natively and ship with this module.
+That's it — everything else, including all visual effects, ships with the
+module itself.
 
 ## Installation
 
-### Via manifest URL
-
 1. In Foundry's **Add-on Modules** tab, click **Install Module**.
-2. Paste this manifest URL:
+2. Paste this manifest URL and click **Install**:
 
    ```
-   https://github.com/b34rblack-glitch/GMhub-CommunityEdition/releases/latest/download/module.json
+   https://github.com/b34rblack-glitch/GMhub-CommunityScreen/releases/latest/download/module.json
    ```
 
-3. Click **Install**. Foundry will fetch the latest release and its
-   dependencies.
+Prefer a manual install? Download `module.zip` from the
+[latest release](https://github.com/b34rblack-glitch/GMhub-CommunityScreen/releases),
+unzip it into your Foundry `Data/modules/` directory, and restart Foundry.
 
-### Manual install
+Updates arrive through Foundry's normal **Check for Updates** button — no
+extra steps.
 
-Download the latest `module.zip` from the
-[Releases](https://github.com/b34rblack-glitch/GMhub-CommunityEdition/releases)
-page, unzip into your Foundry `Data/modules/community-screen/` directory,
-and restart Foundry.
+## Getting started
 
-## Setup (one-time per world)
+The first time you enable the module in a world, a **setup wizard** opens
+and walks you through everything — it can even create the Table user account
+for you. You can re-run it anytime from the Community Screen control palette.
 
-1. **Create a Table user** in **Game Settings → Configure Players**. Role:
-   Player. Pick a memorable name and a password (or none — see Troubleshooting).
-2. **Note the world URL** Foundry shows in the join screen.
-3. **Open module settings** (GM laptop): **Game Settings → Configure Settings →
-   Module Settings → Community Screen**. Set **Table User** to the new
-   account. **You can enter either the user's name (e.g. `Table`) or the
-   user ID** — both work.
-4. **Launch a second browser session** (separate browser, separate profile,
-   or another device) on the world URL and log in as the Table user.
-5. **Full-screen the Table browser** (`F11`), drag it to the TV, and walk
-   away. The map should now fill the screen with no UI clutter.
+If you'd rather set things up by hand:
 
-## Usage
+1. **Create a Table user** in **Game Settings → Configure Players** with the
+   **Player** role. "Table" is a fine name.
+2. **Point the module at it**: in **Game Settings → Configure Settings →
+   Community Screen**, set **Table User** to that account (the name or the
+   user ID — both work).
+3. **Log the TV in**: open your world's URL in a browser on the TV (or any
+   second device/browser profile) and log in as the Table user.
+4. **Go full screen** (`F11`) and walk away. The map should fill the screen
+   with no UI clutter.
 
-- **Push a journal.** Open the journal on the GM laptop, click the **Push to
-  Table** header button. The journal renders centered on the TV.
-- **Push an item card.** Same pattern from any item sheet.
-- **Push a portrait.** From an actor sheet or by right-clicking the actor in
-  the Actors directory.
-- **Close everything.** Hit `Ctrl+Shift+P` or click "Close All Pop-ups" in
-  the Control Palette.
-- **Switch into setup mode** (UI back, canvas pannable) for staging:
-  `Ctrl+Shift+U`. Hit it again to return to play mode.
-- **Run combat.** Start a combat encounter. Whoever the tracker shows as
-  up will drive the Table's vision and the active-turn ring; advancing
-  the turn on the GM client swaps both automatically.
+## Everyday use
 
-## Settings reference
+- **Push a journal, item card, or portrait** — click the **Push to Table**
+  button in the sheet's header, or right-click the entry in the sidebar.
+- **Clear the TV** — press `Ctrl+Shift+P` or click **Close All Pop-ups** in
+  the control palette.
+- **Stage the next scene** — press `Ctrl+Shift+U` to flip the TV into setup
+  mode (UI back, map pannable) while you arrange things; press it again to
+  return to play mode.
+- **Run combat as usual** — start an encounter and the TV takes care of
+  itself: the view and the highlight ring follow the turn order
+  automatically as you advance turns.
 
-| Setting                        | Scope  | Default | What it does                                                                |
-| ------------------------------ | ------ | ------- | --------------------------------------------------------------------------- |
-| Table User                     | world  | ""      | The user account that drives the Table TV. Accepts a user name or id.       |
-| Default Scene Fit Mode         | world  | contain | Fit mode applied when a scene has no per-scene override.                    |
-| Custom Scale Override          | world  | 1.0     | Force a specific zoom (currently informational; auto-fit takes precedence). |
-| Show Active-Turn Highlight     | client | false   | Draw the highlight ring on this client (default on for the Table).          |
-| Active-Turn Highlight Style    | world  | default | subtle / default / dramatic / ornate (all native).                          |
-| Color Highlight by Disposition | world  | true    | Yellow / red / gray ring per disposition. Off → single yellow.              |
-| Suppress Chat Input on Table   | world  | true    | Hides chat input on the Table client.                                       |
-| Auto-grant OWNER on PCs        | world  | true    | Grant the Table user OWNER on every player-owned actor at ready.            |
-| Dim Canvas Behind Pop-ups      | world  | true    | 60% dark overlay behind open pop-ups on the Table.                          |
+## Settings
 
-## Keybindings reference
+Find these under **Game Settings → Configure Settings → Community Screen**.
 
-| Action                  | Default        | Scope |
-| ----------------------- | -------------- | ----- |
-| Toggle Table Mode       | `Ctrl+Shift+U` | GM    |
-| Close All Table Pop-ups | `Ctrl+Shift+P` | GM    |
+| Setting                         | Default   | What it does                                                              |
+| ------------------------------- | --------- | ------------------------------------------------------------------------- |
+| Table User                      | _(empty)_ | The account that drives the TV. Accepts a user name or user ID.           |
+| Default Scene Fit Mode          | contain   | How scenes fit the TV. Override per scene in Scene Config.                |
+| Physical grid-square size       | 1.0       | For physical-mini mode: the real-world size of one grid square on the TV. |
+| Physical size unit              | inch      | Inches or centimeters, for the setting above.                             |
+| Table display diagonal (inches) | 0         | Your TV's diagonal size — needed only for physical-mini mode.             |
+| Table display width / height    | 0 (auto)  | Your TV's native resolution. Leave at 0 to auto-detect.                   |
+| Show Active-Turn Highlight      | off       | Draw the highlight ring on this device (turn on for the TV).              |
+| Active-Turn Highlight Style     | default   | Subtle, default, dramatic, or ornate.                                     |
+| Color Highlight by Disposition  | on        | Different ring colors for friendly, neutral, and hostile combatants.      |
+| Show Combat HUD                 | off       | Text overlay with current/next combatant and round (turn on for the TV).  |
+| Suppress Chat Input on Table    | on        | Hides the chat box on the TV so spectators can't type.                    |
+| Auto-grant OWNER on PCs         | on        | Keeps permissions in sync so players can drag their tokens on the TV.     |
+| Dim Canvas Behind Pop-ups       | on        | Darkens the map while shared content is on screen.                        |
+| Enable Spotlight Token Control  | off       | Adds Spotlight buttons to the GM control palette.                         |
 
-Re-bind in **Configure Controls → Community Screen**.
+## Keyboard shortcuts
 
-## System compatibility
+| Action                       | Default        |
+| ---------------------------- | -------------- |
+| Toggle Table play/setup mode | `Ctrl+Shift+U` |
+| Close all pop-ups on the TV  | `Ctrl+Shift+P` |
 
-The module is **system-agnostic**: it never touches system-specific data
-paths. If your system runs on Foundry v14, Community Screen works. PF2e and
-other systems that arrived after v14 launch should work as soon as the
-system itself is v14-compatible; please report regressions on the
-[issue tracker](https://github.com/b34rblack-glitch/GMhub-CommunityEdition/issues).
+Both are GM-only and can be re-bound in **Configure Controls → Community
+Screen**.
 
-## Known limitations
+## Works with your game system
 
-- **Table-user picker** is a plain text input for the user id in v0.1 — a
-  dropdown of non-GM users arrives in v0.2.
-- **Scene Levels mirroring** uses `canvas.viewLevel` if available. v14
-  shipped Scene Levels without a dedicated `levelChange` hook; cross-level
-  changes are mirrored at `canvasReady`. A polling fallback is on the
-  roadmap.
-- **No system-specific Push to Table** for compendium types (e.g. a roll
-  table from a journal cell). v0.2.
-- **Multiple GMs** — `executeAsGM` picks one GM, and ownership writes route
-  through it. Assumes one human is "the GM with the laptop"; multi-GM
-  setups should still work but haven't been stress-tested.
+Community Screen is **system-agnostic** — it doesn't depend on any
+particular game system's data, so if your system runs on Foundry v13/v14, it
+works. If you hit a system-specific issue, please report it on the
+[issue tracker](https://github.com/b34rblack-glitch/GMhub-CommunityScreen/issues).
 
 ## Troubleshooting
 
-**The Table sees a black screen.**
-The Table user has no actors with OBSERVER or OWNER ownership. The module
-warns about this at ready. Solutions: (a) enable Auto-grant OWNER (default
-on); (b) manually grant OBSERVER on every player actor on the GM client.
+**The TV shows a black screen.**
+The Table user can't see through anyone's eyes yet. Make sure **Auto-grant
+OWNER on PCs** is enabled (it is by default), or manually grant the Table
+user Observer permission on your player characters.
 
-**Pop-ups don't appear on the Table when I push.**
+**Nothing appears on the TV when I push.**
+Check that the TV's browser is open, connected, and logged in as the Table
+user — the control palette's indicator shows whether it's online. Then
+confirm the **Table User** setting matches that account.
 
-1. Check the Table user is logged in (browser tab open and connected). The
-   Control Palette indicator shows their state.
-2. Check the Table user id in settings matches the actual user.
-3. Open the browser console on the Table — look for `[Community Screen]`
-   messages.
+**The map still pans or zooms on the TV.**
+Make sure the **libWrapper** module is installed and enabled — the canvas
+lock depends on it.
 
-**The canvas pans on the Table anyway.**
-Confirm `libWrapper` is installed and active. Run `libWrapper.LIBWRAPPER`
-in the console — it should be defined. Without it the lock can't engage.
+**Players can't drag their tokens on the TV.**
+Make sure **Auto-grant OWNER on PCs** is enabled and the Table user is
+logged in. Note this covers players' own linked characters; unlinked NPC
+tokens aren't included.
 
-**Players can't drag their tokens.**
-Auto-grant OWNER must be on, the Table user must be configured, and they
-must be logged in. Token ownership is per Actor — unlinked NPC tokens need
-ownership granted on the Token Document, which v0.1 doesn't sync (players
-usually only drag their own linked PC tokens).
+**The highlight ring doesn't show.**
+Turn on **Show Active-Turn Highlight** on the TV's browser — it's a
+per-device setting and is off everywhere by default.
 
-**Active-turn ring doesn't appear.**
-Set **Show Active-Turn Highlight** to true on the Table client. The
-default is off on every client except the Table.
+**A scene doesn't fit the TV well.**
+Open the scene's configuration and look for the **Community Screen** fit
+mode option — try a different mode for that scene. The world-wide default
+lives in the module settings.
 
-**My TV's aspect ratio looks wrong.**
-Open a scene config from the GM laptop. There's a "Community Screen → Fit
-mode for the Table" select — pick contain / cover / width / height /
-native for that scene. World default is in module settings.
+Still stuck? Open the browser console on the TV (`F12`) and look for
+`[Community Screen]` messages, then include them in a report on the
+[issue tracker](https://github.com/b34rblack-glitch/GMhub-CommunityScreen/issues)
+— bug reports and feature requests are always welcome.
 
-## Releases
+## Good to know
 
-Releases are automated. When a pull request is merged into `main`, a
-GitHub Actions workflow bumps the version (`module.json` and
-`package.json`), commits the bump, builds `module.zip`, and publishes a
-GitHub Release. Foundry's "Check for Updates" sees the new version and
-offers it to existing installs.
-
-PR labels control the bump level:
-
-| Label           | Effect                                 |
-| --------------- | -------------------------------------- |
-| `release:major` | `X.Y.Z` → `(X+1).0.0`                  |
-| `release:minor` | `X.Y.Z` → `X.(Y+1).0`                  |
-| `release:none`  | Skip the release for this PR           |
-| _(no label)_    | `X.Y.Z` → `X.Y.(Z+1)` (patch, default) |
-
-To re-publish the current version without bumping (e.g. to refresh
-assets after a CI hiccup), run the **Release (manual / tag)** workflow
-from the Actions tab with `workflow_dispatch`. Pushing an explicit
-`v*.*.*` tag also cuts a release at that tag.
-
-## Roadmap
-
-See [`docs/design.md`](docs/design.md) §8 for the full plan. Highlights:
-
-- **v0.2** — User-picker dropdown, push history, per-push auto-close
-  timers, drag-to-push, animated WebP highlight assets, OBS / `/stream`
-  parity, single-neutral-color highlight mode.
-- **v0.3** — `CONFIG.queries` fallback when socketlib isn't available,
-  Lock View interop, speaker override for Table chat, multi-Table support,
-  physical-mini scale mode (1 grid = N cm on the TV), per-scene
-  highlight enable/disable.
+- **One GM at the helm.** The module assumes one GM is running the table
+  from their laptop. Worlds with multiple GMs logged in should work, but
+  that setup sees less testing.
+- **Level changes mirror on scene load.** On maps with multiple levels, the
+  TV matches your level when a scene loads; mid-scene level hops may need a
+  scene refresh.
 
 ## Credits & inspiration
 
-This module stands on the shoulders of giants. Studied, borrowed patterns
-from, or otherwise admired:
+Community Screen stands on the shoulders of some excellent community
+modules:
 
 - [Monk's Common Display](https://github.com/ironmonk108/monks-common-display)
-  — the closest existing module; primary reference for the dedicated-user
-  push workflow.
+  — the closest existing module and the primary reference for the
+  dedicated-user push workflow.
 - [Stream View](https://github.com/sPOiDar/fvtt-module-stream-view) — the
-  pioneer of the dedicated-user, strip-UI, follow-camera lineage.
+  pioneer of the dedicated-user, clean-display, follow-camera idea.
 - [Lock View](https://foundryvtt.com/packages/LockView) — canvas-lock prior
-  art; ship alongside this module if you want even more fine-grained lock
-  controls.
+  art; pairs well with this module if you want even finer lock controls.
 - [Minimal UI](https://foundryvtt.com/packages/minimal-ui) and
-  [Display Mode](https://foundryvtt.com/packages/displaymode) — CSS-hiding
-  patterns and selector references.
+  [Display Mode](https://foundryvtt.com/packages/displaymode) — UI-hiding
+  inspiration.
 - [socketlib](https://github.com/farling42/foundryvtt-socketlib) and
-  [lib-wrapper](https://github.com/ruipin/fvtt-lib-wrapper) — hard
-  dependencies; both are foundational community libraries.
+  [libWrapper](https://github.com/ruipin/fvtt-lib-wrapper) — the foundational
+  libraries this module is built on.
 - [Sequencer](https://foundryvtt.com/packages/sequencer) and
-  [JB2A](https://www.jb2a.com/) — optional auto-upgrade target for the
-  active-turn highlight.
+  [JB2A](https://www.jb2a.com/) — visual inspiration for the ornate
+  highlight style.
 
 ## License
 
