@@ -81,6 +81,10 @@
       "spotlight-enabled": {
         "name": "Enable Spotlight Token Control",
         "hint": "Show a GM-only 'Spotlight token' control in the Community Screen palette to force the Table onto a chosen token's vision until cleared. Auto-clears when combat starts or ends."
+      },
+      "setup-complete": {
+        "name": "First-run setup complete",
+        "hint": "Internal flag: set once the first-run setup wizard has been completed or dismissed. Hidden from this list; the wizard reopens from the Community Screen palette's 'Run setup' button."
       }
     },
     "keybindings": {
@@ -99,7 +103,8 @@
       "refit-scene": "Refit Scene",
       "toggle-table-mode": "Toggle Table Mode",
       "spotlight": "Spotlight Token",
-      "clear-spotlight": "Clear Spotlight"
+      "clear-spotlight": "Clear Spotlight",
+      "run-setup": "Run setup"
     },
     "spotlight": {
       "dialog-title": "Spotlight a token on the Table",
@@ -124,6 +129,63 @@
       "table-online": "Table user is online",
       "table-offline": "Table user is offline",
       "no-table-user": "No Table user configured"
+    },
+    "setup-wizard": {
+      "title": "Community Screen setup",
+      "progress": "Step {number} of {total}",
+      "nav": {
+        "back": "Back",
+        "next": "Next",
+        "finish": "Finish",
+        "dismiss": "Don't show again"
+      },
+      "welcome": {
+        "title": "Welcome to Community Screen",
+        "body": "This wizard sets up the shared Table display: it creates or picks the dedicated Table user, points the module at it, walks you through the recommended defaults, and confirms everything is connected before you finish. You can reopen it any time from the 'Run setup' button in the Community Screen palette."
+      },
+      "dependencies": {
+        "title": "Required modules",
+        "body": "Community Screen needs the socketlib and lib-wrapper modules active to talk to the Table client and manage the canvas.",
+        "active": "Active",
+        "inactive": "Not active",
+        "instruction": "Enable the modules above in Manage Modules and reload the world, then continue.",
+        "blocked": "Enable socketlib and lib-wrapper (and reload the world) before continuing."
+      },
+      "table-user": {
+        "title": "Table user",
+        "body": "Pick the dedicated player-role user that drives the shared TV. You can create a new one now or point the module at a user you already have.",
+        "mode-create": "Create a new \"Table\" player user",
+        "mode-select": "Use an existing user",
+        "create-hint": "A new player-role user named \"Table\" is created when you finish. It has no password by default — set one later from Foundry's user-management screen if the shared TV needs to log in unattended.",
+        "select-label": "Existing user",
+        "empty": "There are no non-GM users to choose from yet. Choose \"Create a new Table player user\" above instead.",
+        "reuse": "A user named \"{name}\" already exists. Reuse it instead of creating a second \"Table\" user — duplicate names make the Table user ambiguous.",
+        "reuse-action": "Reuse this user"
+      },
+      "settings": {
+        "title": "Recommended defaults",
+        "body": "Review the module's defaults. Everything here has a sensible starting value; adjust anything you like now or later in the module settings.",
+        "editable-title": "Adjust now",
+        "physical-title": "Physical-mini scale",
+        "physical-res-info": "The Table display's native resolution auto-detects on the Table client, so there's nothing to set here.",
+        "client-title": "Set on the Table client",
+        "client-note": "These are per-display toggles — turn them on from the Table client itself (this GM screen can't set them for the TV).",
+        "described-title": "Good to know",
+        "value-on": "On",
+        "value-off": "Off"
+      },
+      "connectivity": {
+        "title": "Connect the Table",
+        "body": "Finally, confirm the Table client is reachable. You can finish setup whether or not it's online right now.",
+        "status-online": "{name} is connected to the shared TV.",
+        "status-offline": "{name} is not connected yet — open this world on the Table TV and log in as that user.",
+        "pending": "\"{name}\" will be created when you finish. Afterward, open this world on the Table TV and log in as that user."
+      },
+      "finish": {
+        "done": "Community Screen setup complete.",
+        "create-failed": "Could not create the Table user. Check that you have permission to manage users, then try again.",
+        "no-user": "Pick or create a Table user before finishing."
+      }
     },
     "notifications": {
       "pushed": "Pushed to Table.",

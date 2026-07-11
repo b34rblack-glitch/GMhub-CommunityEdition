@@ -1,0 +1,208 @@
+{{!--
+  templates/setup-wizard.hbs
+  First-run setup wizard body + footer. Rendered inside the AppV2 <form>.
+  All copy is passed pre-localized via _prepareContext (labels.*) — this
+  template carries no literal user-visible strings.
+
+  Linear flow: exactly one is* flag is true per render, selecting the step
+  body. Navigation buttons are type="button" + data-action so they never
+  submit the form (which would fire the merge handler but not navigate).
+
+  Later steps flesh out the dependency, table-user, settings, and connectivity
+  bodies; the framework (header, per-step switch, footer) is stable.
+--}}
+<div class="community-screen-setup-wizard-body">
+  <p class="community-screen-setup-wizard-progress">{{labels.progress}}</p>
+
+  {{#if isWelcome}}
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.welcomeTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.welcomeBody}}</p>
+  </section>
+  {{/if}}
+
+  {{#if isDependencies}}
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.dependenciesTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.dependenciesBody}}</p>
+    <ul class="community-screen-setup-wizard-deps">
+      {{#each dependencies}}
+      <li class="community-screen-setup-wizard-dep {{#if this.active}}is-active{{else}}is-inactive{{/if}}">
+        <i class="fa-solid {{#if this.active}}fa-circle-check{{else}}fa-circle-xmark{{/if}}"></i>
+        <span class="community-screen-setup-wizard-dep-name">{{this.id}}</span>
+        <span class="community-screen-setup-wizard-dep-status">{{this.statusText}}</span>
+      </li>
+      {{/each}}
+    </ul>
+    {{#unless depsOk}}
+    <p class="community-screen-setup-wizard-warn">{{labels.dependenciesInstruction}}</p>
+    {{/unless}}
+  </section>
+  {{/if}}
+
+  {{#if isTableUser}}
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.tableUserTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.tableUserBody}}</p>
+
+    {{#if showReuseOffer}}
+    <div class="community-screen-setup-wizard-reuse">
+      <p>{{labels.tableUserReuse}}</p>
+      <button type="button" data-action="reuse-table-user">
+        <i class="fa-solid fa-rotate-left"></i>
+        <span>{{labels.tableUserReuseAction}}</span>
+      </button>
+    </div>
+    {{/if}}
+
+    <div class="community-screen-setup-wizard-field">
+      <label class="community-screen-setup-wizard-choice">
+        <input type="radio" name="tableUserMode" value="create" {{#if tableUserModeCreate}}checked{{/if}} />
+        <span>{{labels.modeCreate}}</span>
+      </label>
+      <label class="community-screen-setup-wizard-choice">
+        <input type="radio" name="tableUserMode" value="select" {{#if tableUserModeSelect}}checked{{/if}} />
+        <span>{{labels.modeSelect}}</span>
+      </label>
+    </div>
+
+    {{!-- Both sub-blocks are always in the DOM; _bindTableUserReveal toggles
+          .is-hidden on the mode radio so the switch needs no re-render. --}}
+    <div class="community-screen-setup-wizard-mode-block {{#unless tableUserModeCreate}}is-hidden{{/unless}}" data-mode-block="create">
+      <p class="community-screen-setup-wizard-hint">{{labels.tableUserCreateHint}}</p>
+    </div>
+
+    <div class="community-screen-setup-wizard-mode-block {{#unless tableUserModeSelect}}is-hidden{{/unless}}" data-mode-block="select">
+      {{#if hasUserOptions}}
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-field-label" for="community-screen-setup-wizard-user-select">{{labels.tableUserSelectLabel}}</label>
+        <select id="community-screen-setup-wizard-user-select" name="tableUserId">
+          {{#each userOptions}}
+          <option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{else}}
+      <p class="community-screen-setup-wizard-warn">{{labels.tableUserEmpty}}</p>
+      {{/if}}
+    </div>
+  </section>
+  {{/if}}
+
+  {{#if isSettings}}
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.settingsTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.settingsBody}}</p>
+
+    {{!-- Bucket A: editable core three (committed on Finish). --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsEditableTitle}}</h3>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-field-label" for="community-screen-setup-wizard-fit-mode">{{labels.fitModeName}}</label>
+        <select id="community-screen-setup-wizard-fit-mode" name="fitMode">
+          {{#each fitModeOptions}}
+          <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+        </select>
+        <p class="community-screen-setup-wizard-hint">{{labels.fitModeHint}}</p>
+      </div>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-choice">
+          <input type="checkbox" name="popupBackdrop" {{#if popupBackdrop}}checked{{/if}} />
+          <span>{{labels.popupBackdropName}}</span>
+        </label>
+        <p class="community-screen-setup-wizard-hint">{{labels.popupBackdropHint}}</p>
+      </div>
+
+      <div class="community-screen-setup-wizard-field">
+        <label class="community-screen-setup-wizard-choice">
+          <input type="checkbox" name="autoGrantOwnership" {{#if autoGrantOwnership}}checked{{/if}} />
+          <span>{{labels.autoGrantName}}</span>
+        </label>
+        <p class="community-screen-setup-wizard-hint">{{labels.autoGrantHint}}</p>
+      </div>
+    </div>
+
+    {{!-- Bucket B: physical-mini, described-with-current-value, revealed only
+          when fit-mode=physical (toggled live by _bindSettingsReveal). --}}
+    <div class="community-screen-setup-wizard-subgroup community-screen-setup-wizard-physical {{#unless isPhysical}}is-hidden{{/unless}}" data-physical-block>
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsPhysicalTitle}}</h3>
+      {{#each physicalSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <div class="community-screen-setup-wizard-described-head">
+          <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+          <span class="community-screen-setup-wizard-described-value">{{this.value}}</span>
+        </div>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+      <p class="community-screen-setup-wizard-hint">{{labels.settingsPhysicalResInfo}}</p>
+    </div>
+
+    {{!-- Bucket D: client-scoped, informational only — NEVER written. --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsClientTitle}}</h3>
+      {{#each clientSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+      <p class="community-screen-setup-wizard-hint">{{labels.settingsClientNote}}</p>
+    </div>
+
+    {{!-- Bucket C: other world settings, described-with-current-value. --}}
+    <div class="community-screen-setup-wizard-subgroup">
+      <h3 class="community-screen-setup-wizard-subhead">{{labels.settingsDescribedTitle}}</h3>
+      {{#each describedSettings}}
+      <div class="community-screen-setup-wizard-described">
+        <div class="community-screen-setup-wizard-described-head">
+          <span class="community-screen-setup-wizard-described-name">{{this.name}}</span>
+          <span class="community-screen-setup-wizard-described-value">{{this.value}}</span>
+        </div>
+        <p class="community-screen-setup-wizard-hint">{{this.hint}}</p>
+      </div>
+      {{/each}}
+    </div>
+  </section>
+  {{/if}}
+
+  {{#if isConnectivity}}
+  <section class="community-screen-setup-wizard-step">
+    <h2 class="community-screen-setup-wizard-step-title">{{labels.connectivityTitle}}</h2>
+    <p class="community-screen-setup-wizard-lede">{{labels.connectivityBody}}</p>
+    <p class="community-screen-setup-wizard-connectivity {{#if connectivityPending}}is-pending{{else}}{{#if connectivityOnline}}is-online{{else}}is-offline{{/if}}{{/if}}">
+      {{#if connectivityPending}}
+      <i class="fa-solid fa-circle-plus"></i>
+      {{else}}
+      <i class="fa-solid {{#if connectivityOnline}}fa-circle-check{{else}}fa-circle-xmark{{/if}}"></i>
+      {{/if}}
+      <span>{{connectivityStatusText}}</span>
+    </p>
+  </section>
+  {{/if}}
+</div>
+
+<footer class="community-screen-setup-wizard-footer">
+  <button type="button" class="community-screen-setup-wizard-dismiss" data-action="dismiss">
+    {{labels.dismiss}}
+  </button>
+  <span class="community-screen-setup-wizard-footer-spacer"></span>
+  <button type="button" data-action="back" {{#unless canBack}}disabled{{/unless}}>
+    <i class="fa-solid fa-arrow-left"></i>
+    <span>{{labels.back}}</span>
+  </button>
+  {{#if isLast}}
+  <button type="button" class="community-screen-setup-wizard-primary" data-action="finish">
+    <i class="fa-solid fa-check"></i>
+    <span>{{labels.finish}}</span>
+  </button>
+  {{else}}
+  <button type="button" class="community-screen-setup-wizard-primary" data-action="next">
+    <span>{{labels.next}}</span>
+    <i class="fa-solid fa-arrow-right"></i>
+  </button>
+  {{/if}}
+</footer>
