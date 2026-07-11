@@ -203,6 +203,31 @@ Still stuck? Open the browser console on the TV (`F12`) and look for
   TV matches your level when a scene loads; mid-scene level hops may need a
   scene refresh.
 
+## Testing & CI
+
+The fragile runtime paths that broke and were re-fixed across `v0.1.3 → v0.1.15`
+— socket handler registration/ordering, push journal/item/actor/image, close-all
+across AppV2 + legacy windows, canvas-lock, combat vision, scene follow, and
+scene fit — are guarded by a unit-test layer that runs against a **mocked**
+Foundry environment (no real Foundry install required).
+
+- **Run the tests:** `npm test` (Node 20+). Uses the built-in `node --test`
+  runner with a jsdom preload (`test-setup/dom.mjs`) and a shared Foundry mock
+  harness (`test/helpers/foundry-mock.mjs`).
+- **CI:** the `validate` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+  runs the tests on every push and pull request, alongside manifest validation,
+  `node --check` syntax parsing, ESLint, Prettier, and JSON validation.
+- **What's covered (and what isn't):** see
+  [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) for the
+  surface-by-surface matrix, the emulated Foundry API shapes, and an honest list
+  of known gaps. Every row is **mock-emulated — not real-install-verified**.
+
+> **Note:** for a failing test to actually _block a merge_, the `validate` job
+> must be set as a **required status check** in the repository's branch-protection
+> rules for `main` — a GitHub repo setting, not something the repo files can
+> enforce. See the compatibility matrix for the residual release-path leaks
+> (`workflow_dispatch`, admin bypass).
+
 ## Credits & inspiration
 
 Community Screen stands on the shoulders of some excellent community
