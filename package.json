@@ -1,6 +1,6 @@
 {
   "name": "community-screen",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": true,
   "description": "Foundry VTT v14 module: drive a shared TV at the table from the GM laptop.",
   "type": "module",
