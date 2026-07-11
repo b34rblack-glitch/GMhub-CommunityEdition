@@ -52,14 +52,20 @@ export default [
     },
   },
   {
-    // Unit tests run under plain Node via `node --test` — Node globals, not
-    // Foundry's browser runtime. console is fine in test output.
-    files: ["test/**/*.mjs"],
+    // Unit tests run under plain Node via `node --test`, but the harness
+    // installs a mocked Foundry environment on `globalThis` and a jsdom
+    // preload supplies the browser DOM globals (document/HTMLElement/Event/
+    // window/requestAnimationFrame). Allow Node + browser + the Foundry
+    // globals the mock provides so assertions can reference them if needed.
+    // console is fine in test output.
+    files: ["test/**/*.mjs", "test-setup/**/*.mjs"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
       globals: {
         ...globals.node,
+        ...globals.browser,
+        ...foundryGlobals,
       },
     },
     rules: {

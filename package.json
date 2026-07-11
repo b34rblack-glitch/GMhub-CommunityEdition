@@ -5,10 +5,10 @@
   "description": "Foundry VTT v14 module: drive a shared TV at the table from the GM laptop.",
   "type": "module",
   "scripts": {
-    "format": "prettier --write \"scripts/**/*.mjs\" \"styles/**/*.css\" \"lang/**/*.json\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"scripts/**/*.mjs\" \"styles/**/*.css\" \"lang/**/*.json\" \"*.{json,md}\"",
-    "lint": "eslint scripts test",
-    "test": "node --test",
+    "format": "prettier --write \"scripts/**/*.mjs\" \"test/**/*.mjs\" \"test-setup/**/*.mjs\" \"styles/**/*.css\" \"lang/**/*.json\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"scripts/**/*.mjs\" \"test/**/*.mjs\" \"test-setup/**/*.mjs\" \"styles/**/*.css\" \"lang/**/*.json\" \"*.{json,md}\"",
+    "lint": "eslint scripts test test-setup",
+    "test": "node --import ./test-setup/dom.mjs --test",
     "check:syntax": "node --check scripts/main.mjs && node --check scripts/module.mjs && node --check scripts/settings.mjs && node --check scripts/identity.mjs && node --check scripts/sockets.mjs && node --check scripts/ui-hiding.mjs && node --check scripts/canvas-lock.mjs && node --check scripts/scene-fit.mjs && node --check scripts/ownership.mjs && node --check scripts/vision.mjs && node --check scripts/popups.mjs && node --check scripts/push-buttons.mjs && node --check scripts/keybindings.mjs && node --check scripts/scene-follow.mjs && node --check scripts/combat-highlight.mjs && node --check scripts/combat-hud.mjs && node --check scripts/control-palette.mjs && node --check scripts/setup-wizard.mjs && node --check scripts/setup-wizard-logic.mjs && node --check scripts/lib/logger.mjs && node --check scripts/lib/helpers.mjs",
     "check:manifest": "node -e \"const m=JSON.parse(require('fs').readFileSync('module.json','utf8')); if(!m.id||!m.esmodules||!m.compatibility)throw new Error('module.json missing required fields'); console.log('module.json OK: '+m.id+' v'+m.version);\"",
     "check": "npm run check:manifest && npm run check:syntax && npm run lint && npm run test"
@@ -17,6 +17,7 @@
     "@eslint/js": "^9.10.0",
     "eslint": "^9.10.0",
     "globals": "^15.9.0",
+    "jsdom": "^25.0.1",
     "prettier": "^3.3.3"
   },
   "engines": {

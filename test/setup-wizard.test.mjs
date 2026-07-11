@@ -10,8 +10,9 @@
 // `ReferenceError: foundry is not defined` and abort the whole test run. The
 // logic seam (KD10 in .conclave/spec.md) exists precisely so this stays pure.
 //
-// CI does NOT run tests (only lint/format/JSON validation), so the operator's
-// local `npm run check` is the load-bearing gate for these.
+// CI runs `npm run test` (the validate job) in addition to lint/format/JSON
+// validation, so these — and the whole node --test suite — gate merges as well
+// as the operator's local `npm run check`.
 //
 // Covered:
 //   - evaluateDependencies reducer: both-active / one-missing / both-missing,
@@ -136,25 +137,19 @@ test("findReusableTableUser: finds a non-GM 'Table', ignores GM/other names", ()
     { id: "p2", name: "Table" },
   );
   // A GM named "Table" must NOT be offered (Table user must be player-role).
-  assert.equal(
-    findReusableTableUser([{ id: "gm1", name: "Table", isGM: true }]),
-    null,
-  );
+  assert.equal(findReusableTableUser([{ id: "gm1", name: "Table", isGM: true }]), null);
   // No "Table" at all → null; no arg → null.
   assert.equal(findReusableTableUser([{ id: "p1", name: "Alice", isGM: false }]), null);
   assert.equal(findReusableTableUser(), null);
   // Custom name match.
-  assert.deepEqual(
-    findReusableTableUser([{ id: "p9", name: "TV", isGM: false }], "TV"),
-    { id: "p9", name: "TV" },
-  );
+  assert.deepEqual(findReusableTableUser([{ id: "p9", name: "TV", isGM: false }], "TV"), {
+    id: "p9",
+    name: "TV",
+  });
 });
 
 test("FIT_MODES: canonical fit-mode choices in registration order", () => {
-  assert.deepEqual(
-    [...FIT_MODES],
-    ["contain", "cover", "width", "height", "native", "physical"],
-  );
+  assert.deepEqual([...FIT_MODES], ["contain", "cover", "width", "height", "native", "physical"]);
 });
 
 test("classifySetting: known keys land in the right bucket; unknown → null", () => {
@@ -216,27 +211,21 @@ test("aware-and-adjust: every config:true setting is surfaced (not null, not hid
 
 test("shouldAutoOpen: only GM + no Table user + flag unset auto-opens", () => {
   // The one case that auto-opens.
+  assert.equal(shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: false }), true);
+  // An unset (undefined) flag is still "not complete" → auto-opens.
   assert.equal(
-    shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: false }),
+    shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: undefined }),
     true,
   );
-  // An unset (undefined) flag is still "not complete" → auto-opens.
-  assert.equal(shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: undefined }), true);
   // Non-GM / Table client never auto-opens.
-  assert.equal(
-    shouldAutoOpen({ isGM: false, tableUserSetting: "", setupComplete: false }),
-    false,
-  );
+  assert.equal(shouldAutoOpen({ isGM: false, tableUserSetting: "", setupComplete: false }), false);
   // A Table user is already configured → don't auto-open.
   assert.equal(
     shouldAutoOpen({ isGM: true, tableUserSetting: "someUserId", setupComplete: false }),
     false,
   );
   // Flag set (finished or dismissed) → don't auto-open.
-  assert.equal(
-    shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: true }),
-    false,
-  );
+  assert.equal(shouldAutoOpen({ isGM: true, tableUserSetting: "", setupComplete: true }), false);
   // Defaults / no arg → false (never auto-open on missing state).
   assert.equal(shouldAutoOpen(), false);
   assert.equal(shouldAutoOpen({}), false);
