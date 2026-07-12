@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   validate:
-    name: Lint + syntax + manifest
+    name: Lint + syntax + manifest + tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,6 +33,9 @@ jobs:
 
       - name: ESLint
         run: npm run lint
+
+      - name: Unit tests (node --test + jsdom mock harness)
+        run: npm run test
 
       - name: Prettier (check)
         run: npm run format:check
